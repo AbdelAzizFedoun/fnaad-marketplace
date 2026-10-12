@@ -1,0 +1,48 @@
+# Git backups
+*.git_backup
+.git_backup/
+*/.git_backup/
+
+# Node & JS Dependencies
+node_modules/
+*/node_modules/
+package-lock.json.bak
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+*/dist/
+build/
+web-build/
+.expo/
+*/.expo/
+
+# Environment files (contain secrets)
+.env
+.env.*
+!.env.example
+*.env.local
+
+# Python
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*.egg-info/
+*.sqlite3
+
+# Virtual environments
+venv/
+.venv/
+*/venv/
+*/.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+

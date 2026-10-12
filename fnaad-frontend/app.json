@@ -1,0 +1,92 @@
+{
+  "expo": {
+    "name": "fnaad-frontend",
+    "slug": "fnaad-frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/app-icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "userInterfaceStyle": "light",
+    "scheme": "fnaad",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.abdel22.fnaadfrontend",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "whatsapp",
+          "twitter",
+          "tg",
+          "instagram",
+          "fbapi",
+          "comgooglemaps",
+          "geo"
+        ],
+        "NSCameraUsageDescription": "FNAAD utilise votre appareil photo pour prendre des photos d'oeuvres.",
+        "NSPhotoLibraryUsageDescription": "FNAAD utilise vos photos pour ajouter des oeuvres et des photos de profil.",
+        "NSLocationWhenInUseUsageDescription": "FNAAD utilise votre position uniquement lorsque vous la partagez dans une conversation.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundColor": "#ffffff"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.abdel22.fnaadfrontend",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FNAAD utilise vos photos pour ajouter des oeuvres et des photos de profil.",
+          "cameraPermission": "FNAAD utilise votre appareil photo pour prendre des photos d'oeuvres."
+        }
+      ],
+      [
+      "expo-location",
+        {
+          "locationWhenInUsePermission": "FNAAD utilise votre position uniquement lorsque vous la partagez dans une conversation."
+        }
+      ],
+      ["expo-audio", {"microphonePermission": "FNAAD uses your microphone only to record voice notes you choose to send."}],
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ff4adf27-f236-4b71-a5f5-fc66d596dcd4"
+      }
+    }
+  }
+}

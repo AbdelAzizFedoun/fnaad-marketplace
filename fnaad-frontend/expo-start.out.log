@@ -1,0 +1,7 @@
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_API_ORIGIN EXPO_PUBLIC_FNAAD_SUBSCRIPTION_MOMO_PROVIDER EXPO_PUBLIC_FNAAD_SUBSCRIPTION_WHATSAPP
+Starting project at C:\Users\FEDOUN ABDEL-AZIZ\Desktop\fnaad-marketplace\fnaad-frontend
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.

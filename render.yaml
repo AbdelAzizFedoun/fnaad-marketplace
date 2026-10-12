@@ -1,0 +1,92 @@
+version: 1
+
+services:
+  - type: web
+    name: fnaad-api
+    env: python
+    plan: starter
+    repo:
+      path: fnaad-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    region: oregon
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          databaseName: fnaad-db
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        generate: true
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: true
+      - key: SITE_BASE_URL
+        value: https://fnaad-marketplace-api.onrender.com
+      - key: DB_ENGINE
+        value: django.db.backends.postgresql
+      - key: DB_NAME
+        value: fnaad
+      - key: DB_USER
+        value: fnaad
+      - key: DB_HOST
+        value: fnaad-db
+      - key: DB_PORT
+        value: 5432
+      - key: DB_CONN_MAX_AGE
+        value: 60
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USE_TLS
+        value: true
+      - key: DEFAULT_FROM_EMAIL
+        value: FNAAD Marketplace <fedounabdelaziz@gmail.com>
+      - key: CAMPAY_BASE_URL
+        value: https://demo.campay.net/api
+      - key: SUBSCRIPTION_PRICE_1_MONTH
+        value: 7
+      - key: SUBSCRIPTION_PRICE_2_MONTHS
+        value: 11
+      - key: SUBSCRIPTION_PRICE_3_MONTHS
+        value: 22
+      - key: CAMPAY_USERNAME
+        # Set this in Render dashboard
+      - key: CAMPAY_PASSWORD
+        # Set this in Render dashboard
+      - key: CAMPAY_WEBHOOK_KEY
+        # Set this in Render dashboard
+      - key: EMAIL_HOST_USER
+        # Set this in Render dashboard
+      - key: EMAIL_HOST_PASSWORD
+        # Set this in Render dashboard
+      - key: ANTHROPIC_API_KEY
+        # Optional
+      - key: GEMINI_API_KEY
+        # Optional
+
+  - type: web
+    name: fnaad-admin
+    env: node
+    plan: starter
+    repo:
+      path: fnaad-admin
+    buildCommand: npm install && npm run build
+    buildFilter:
+      paths:
+        - fnaad-admin/**
+    preBuildCommand: npm ci
+    region: oregon
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://fnaad-marketplace-api.onrender.com/api
+
+databases:
+  - name: fnaad-db
+    plan: starter
+    postgresVersion: 16
+    region: oregon
+    ipAllowList:
+      - 0.0.0.0/0

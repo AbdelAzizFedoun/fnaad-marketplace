@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "415296279013",
+    "project_id": "fnaad-marketplace",
+    "storage_bucket": "fnaad-marketplace.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:415296279013:android:2270cbdceec4ee42b65f0c",
+        "android_client_info": {
+          "package_name": "com.abdel22.fnaadfrontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwQ-yUbtx_TubCaKehW4eBoEgPW83Q4-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

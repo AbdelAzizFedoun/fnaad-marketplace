@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XMI xmi.version="2.1" xmlns:uml="http://www.omg.org/spec/UML/20090901">
+  <uml:Model xmi:id="model.fn_aad.marketplace" name="FN AAD Marketplace Use Cases">
+
+    <!-- Actors -->
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.visitor" name="Visitor"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.client" name="Client"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.artist" name="Artist"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.admin" name="Admin"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.api" name="External API"/>
+    <packagedElement xmi:type="uml:Actor" xmi:id="actor.payment" name="Payment Gateway"/>
+
+    <!-- Use Cases (focused, high-value set) -->
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.browse" name="Browse Catalog"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.authenticate" name="Authenticate (Register / Login)"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.view" name="View Artwork & Artist Profile"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.createListing" name="Create / Manage Listing"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.purchase" name="Purchase Artwork (Buy Now)"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.processPayment" name="Process Payment"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.commission" name="Commission Request"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.messaging" name="Messaging (Client ↔ Artist)"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.orderTracking" name="Order Tracking & History"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.adminModeration" name="Admin: Moderation & User Management"/>
+    <packagedElement xmi:type="uml:UseCase" xmi:id="use.apiAccess" name="API Access (Public/Partner)"/>
+
+    <!-- Associations: connect actors to primary use cases -->
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.visitor.browse">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.visitor.browse.end1" type="actor.visitor"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.visitor.browse.end2" type="use.browse"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.client.view">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.view.end1" type="actor.client"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.view.end2" type="use.view"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.client.purchase">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.purchase.end1" type="actor.client"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.purchase.end2" type="use.purchase"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.artist.create">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.artist.create.end1" type="actor.artist"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.artist.create.end2" type="use.createListing"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.client.commission">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.commission.end1" type="actor.client"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.client.commission.end2" type="use.commission"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.messaging">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.messaging.end1" type="actor.client"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.messaging.end2" type="use.messaging"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.messaging.artist">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.messaging.artist.end1" type="actor.artist"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.messaging.artist.end2" type="use.messaging"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.admin.moderation">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.admin.moderation.end1" type="actor.admin"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.admin.moderation.end2" type="use.adminModeration"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.api.access">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.api.access.end1" type="actor.api"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.api.access.end2" type="use.apiAccess"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.payment.process">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.payment.process.end1" type="actor.payment"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.payment.process.end2" type="use.processPayment"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.purchase.processPayment">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.purchase.processPayment.end1" type="use.purchase"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.purchase.processPayment.end2" type="use.processPayment"/>
+    </packagedElement>
+
+    <packagedElement xmi:type="uml:Association" xmi:id="assoc.orderTracking">
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.orderTracking.end1" type="actor.client"/>
+      <ownedEnd xmi:type="uml:Property" xmi:id="assoc.orderTracking.end2" type="use.orderTracking"/>
+    </packagedElement>
+
+    <!-- Dependency (include) relationships -->
+    <packagedElement xmi:type="uml:Dependency" xmi:id="dep.purchase.auth" client="use.purchase" supplier="use.authenticate"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="dep.purchase.payment" client="use.purchase" supplier="use.processPayment"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="dep.commission.auth" client="use.commission" supplier="use.authenticate"/>
+    <packagedElement xmi:type="uml:Dependency" xmi:id="dep.commission.messaging" client="use.commission" supplier="use.messaging"/>
+
+  </uml:Model>
+</XMI>
