@@ -1,12 +1,12 @@
 import axios from "axios";
 
 const normalizeApiBaseUrl = (raw?: string) => {
-  // No hardcoded tunnel URL: the API base comes from
-  // VITE_API_BASE_URL (see fnaad-admin/.env). An empty
-  // value falls back to a relative "/api" so the panel
-  // works when served from the same origin as the API.
-  const trimmed = (raw || "").trim().replace(/\/+$/, "");
-  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+  // Strip all whitespace, accidental newlines, or spaces
+  const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
+  if (!sanitized) {
+    return "https://fnaad-marketplace-api.onrender.com/api";
+  }
+  return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
 
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
