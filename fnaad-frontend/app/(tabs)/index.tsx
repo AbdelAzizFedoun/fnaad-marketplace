@@ -139,8 +139,14 @@ export default function GalleryScreen() {
     const url = query ? `/catalog/products/?${query}` : "/catalog/products/";
     api
       .get(url, { skipAuth: true } as any)
-      .then((res) => setProducts(unwrapList(res.data)))
-      .catch((err) => console.log("API error:", err.message))
+      .then((res) => {
+        setProducts(unwrapList(res.data));
+        setApiError(null);
+      })
+      .catch((err) => {
+        console.log("API error:", err.message);
+        setApiError(err.message || "Network error");
+      })
       .finally(() => setRefreshing(false));
   }, [selectedRegion, selectedCategory, selectedSort, debouncedSearch]);
 

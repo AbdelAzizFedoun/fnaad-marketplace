@@ -18,6 +18,8 @@ build/
 web-build/
 .expo/
 */.expo/
+*.apk
+*.aab
 
 # Environment files (contain secrets)
 .env

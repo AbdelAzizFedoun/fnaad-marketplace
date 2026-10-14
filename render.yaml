@@ -83,6 +83,29 @@ services:
       - key: VITE_API_BASE_URL
         value: https://fnaad-marketplace-api.onrender.com/api
 
+  - type: static
+    name: fnaad-frontend
+    repo:
+      path: fnaad-frontend
+    buildCommand: npm install && npx expo export --platform web
+    staticPublishPath: dist
+    buildFilter:
+      paths:
+        - fnaad-frontend/**
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://fnaad-marketplace-api.onrender.com/api
+      - key: EXPO_PUBLIC_API_ORIGIN
+        value: https://fnaad-marketplace-api.onrender.com
+      - key: EXPO_PUBLIC_FNAAD_SUBSCRIPTION_WHATSAPP
+        value: "237688254466"
+      - key: EXPO_PUBLIC_FNAAD_SUBSCRIPTION_MOMO_PROVIDER
+        value: "Orange Money"
+
 databases:
   - name: fnaad-db
     plan: starter

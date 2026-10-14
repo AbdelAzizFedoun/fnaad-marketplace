@@ -4,22 +4,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const normalizeApiBaseUrl = (raw?: string) => {
-  // No hardcoded tunnel URL: the API base comes from
-  // EXPO_PUBLIC_API_BASE_URL (see fnaad-frontend/.env). An
-  // empty value falls back to a relative "/api" so web builds
-  // still work from the same origin; native builds need the env.
-  const trimmed = (raw || "").trim().replace(/\/+$/, "");
-  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+  // Strip all whitespace, accidental newlines, or spaces
+  const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
+  if (!sanitized) {
+    return "https://fnaad-marketplace-api.onrender.com/api";
+  }
+  return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
 
 const BASE_URL = normalizeApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
-
-if (!process.env.EXPO_PUBLIC_API_BASE_URL) {
-  console.warn(
-    "[api] EXPO_PUBLIC_API_BASE_URL is not set — using relative /api. " +
-      "Set it in fnaad-frontend/.env for native builds."
-  );
-}
 const API_ORIGIN = (
   process.env.EXPO_PUBLIC_API_ORIGIN || BASE_URL.replace(/\/api\/?$/, "")
 ).trim().replace(/\/+$/, "");
@@ -52,6 +45,7 @@ export const unwrapList = <T,>(data: T[] | { results: T[] }): T[] =>
 
 export const api = axios.create({
   baseURL: BASE_URL,
+  timeout: 45000,
 });
 
 let isRefreshing = false;
