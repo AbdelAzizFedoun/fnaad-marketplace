@@ -53,8 +53,10 @@ services:
       - key: FAPSHI_APIKEY
         sync: false
 
-  - type: static
+  - type: web
     name: fnaad-admin
+    runtime: static
+    plan: free
     region: frankfurt
     rootDir: fnaad-admin
     buildCommand: npm install && npm run build
@@ -66,4 +68,3 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://fnaad-api.onrender.com/api
-
