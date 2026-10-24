@@ -4,7 +4,7 @@ const normalizeApiBaseUrl = (raw?: string) => {
   // Strip all whitespace, accidental newlines, or spaces
   const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
   if (!sanitized) {
-    return "http://localhost:8000/api";
+    return "https://fnaad-api.onrender.com/api";
   }
   return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
