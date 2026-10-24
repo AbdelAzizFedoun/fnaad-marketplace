@@ -3,7 +3,6 @@ version: 1
 databases:
   - name: fnaad-db
     plan: free
-    postgresVersion: 16
     region: frankfurt
 
 services:
