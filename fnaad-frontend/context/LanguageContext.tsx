@@ -9,10 +9,13 @@ type LanguageContextType = {
 };
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
-const LANGUAGE_STORAGE_KEY = "app_language_v2";
+// v3 makes French the first-run/default language while preserving a user's
+// explicit choice after they select another language.
+const LANGUAGE_STORAGE_KEY = "app_language_v3";
+const RTL_LANGUAGES: LanguageCode[] = ["ar"];
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<LanguageCode>("en");
+  const [language, setLanguageState] = useState<LanguageCode>("fr");
 
   useEffect(() => {
     AsyncStorage.getItem(LANGUAGE_STORAGE_KEY).then((saved) => {
@@ -26,6 +29,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setLanguageState(lang);
     AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
   };
+
+  // Keep the web document direction synchronized immediately when a language
+  // is selected. React Native screens re-render from the context state above.
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = language;
+      document.documentElement.dir = RTL_LANGUAGES.includes(language) ? "rtl" : "ltr";
+    }
+  }, [language]);
 
   const t = (key: string, params?: Record<string, string>) => {
     let text = translations[language][key] || translations.en[key] || key;

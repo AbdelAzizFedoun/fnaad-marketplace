@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, ProductImage, Conversation, Message, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings
+from .models import Product, ProductImage, Conversation, Message, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, CreationEvidence
 from social.models import Comment
 from django.db.models import Q
 from django.utils import timezone
@@ -26,7 +26,33 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
-        fields = ["id", "image", "thumbnail", "is_primary", "order"]
+        fields = ["id", "image", "thumbnail", "is_primary", "order", "image_phash", "image_dhash", "image_file_sha256"]
+        read_only_fields = ["thumbnail", "image_phash", "image_dhash", "image_file_sha256"]
+
+    def _media_url(self, field_value):
+        """
+        Build a public media URL using request.build_absolute_uri if available,
+        falling back to settings.SITE_BASE_URL.
+        """
+        if not field_value:
+            return None
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(field_value.url)
+        from django.conf import settings
+        base = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
+        if base:
+            return f"{base}{field_value.url}"
+        return field_value.url
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Rewrite URLs so they always use the public HTTPS origin.
+        if instance.image:
+            data["image"] = self._media_url(instance.image)
+        if instance.thumbnail:
+            data["thumbnail"] = self._media_url(instance.thumbnail)
+        return data
 
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
@@ -45,6 +71,7 @@ class ProductSerializer(serializers.ModelSerializer):
     review_count = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
+    originality_evidence_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -55,9 +82,14 @@ class ProductSerializer(serializers.ModelSerializer):
             "artist_id", "artist_user_id", "artist_avatar", "artist_region", "artist_region_display", "artist_is_verified",
             "is_sold", "sold_at",
             "average_rating", "review_count", "like_count", "comment_count", "view_count",
-            "images", "created_at",
+            "images", "created_at", "copy_of", "copy_confidence", "flagged_as_copy",
+            "verification_level", "creation_method", "passport_token", "originality_evidence_count"
+            , "moods"
         ]
-        read_only_fields = ["status", "public_slug", "public_url", "created_at", "is_sold", "sold_at"]
+        read_only_fields = ["status", "public_slug", "public_url", "created_at", "is_sold", "sold_at", "copy_of", "copy_confidence", "flagged_as_copy", "passport_token", "originality_evidence_count"]
+
+    def get_originality_evidence_count(self, obj):
+        return obj.creation_evidence.count()
 
     def get_average_rating(self, obj):
         reviews = obj.reviews.all()
@@ -73,6 +105,13 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_comment_count(self, obj):
         return obj.comments.count()
+
+
+class CreationEvidenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CreationEvidence
+        fields = ["id", "evidence_file", "note", "is_reviewed", "approved", "created_at"]
+        read_only_fields = ["is_reviewed", "approved", "created_at"]
 
 
 class MessageReplySerializer(serializers.ModelSerializer):
@@ -468,13 +507,15 @@ class CommissionRequestSerializer(serializers.ModelSerializer):
 
 
 
-from accounts.models import ArtistProfile, User
+from accounts.models import ArtistProfile, User, ArtistStudioPhoto
 
 
 class ArtistPublicSerializer(serializers.ModelSerializer):
     region_display = serializers.CharField(source="get_region_display", read_only=True)
     gender_display = serializers.CharField(source="get_gender_display", read_only=True)
     product_count = serializers.SerializerMethodField()
+    follower_count = serializers.SerializerMethodField()
+    studio_photos = serializers.SerializerMethodField()
 
     class Meta:
         model = ArtistProfile
@@ -482,10 +523,18 @@ class ArtistPublicSerializer(serializers.ModelSerializer):
             "id", "brand_name", "bio", "artistic_practice", "avatar",
             "region", "region_display", "gender", "gender_display",
             "is_verified", "product_count",
+            "follower_count", "studio_photos", "is_artist_of_week", "artist_of_week_note",
         ]
 
     def get_product_count(self, obj):
         return obj.products.count()
+
+    def get_follower_count(self, obj):
+        return obj.followers.count()
+
+    def get_studio_photos(self, obj):
+        request = self.context.get("request")
+        return [{"id": photo.id, "image": request.build_absolute_uri(photo.image.url) if request else photo.image.url, "caption": photo.caption} for photo in obj.studio_photos.all()]
 
 
 class ArtistPrivateSerializer(serializers.ModelSerializer):

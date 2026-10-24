@@ -119,10 +119,36 @@ class ArtistProfile(models.Model):
     is_suspended = models.BooleanField(default=False)
     suspended_at = models.DateTimeField(null=True, blank=True)
     suspension_reason = models.CharField(max_length=255, blank=True)
+    copy_strikes = models.PositiveIntegerField(default=0)
+    is_artist_of_week = models.BooleanField(default=False)
+    artist_of_week_note = models.CharField(max_length=255, blank=True)
+    # Free trial tracking for newly registered artists
+    free_trial_started_at = models.DateTimeField(null=True, blank=True)
+    free_trial_ends_at = models.DateTimeField(null=True, blank=True)
+    free_trial_expired_notified_3days = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.brand_name
+
+
+class ArtistStudioPhoto(models.Model):
+    artist = models.ForeignKey(ArtistProfile, on_delete=models.CASCADE, related_name="studio_photos")
+    image = models.ImageField(upload_to="artists/studio/")
+    caption = models.CharField(max_length=160, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ArtistFollow(models.Model):
+    artist = models.ForeignKey(ArtistProfile, on_delete=models.CASCADE, related_name="followers")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="followed_artists")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["artist", "user"], name="unique_artist_follow")]
 
 
 class Notification(models.Model):

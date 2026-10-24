@@ -10,6 +10,7 @@ import Artists from "./pages/Artists";
 import Subscriptions from "./pages/Subscriptions";
 import Reports from "./pages/Reports";
 import Registrations from "./pages/Registrations";
+import Spotlight from "./pages/Spotlight";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/registrations" element={<Registrations />} />
+            <Route path="/spotlight" element={<Spotlight />} />
           </Route>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

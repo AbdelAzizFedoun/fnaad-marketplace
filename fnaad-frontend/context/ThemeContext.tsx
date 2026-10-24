@@ -9,6 +9,11 @@ const THEME_MODE_KEY = "theme_mode";
 
 type ThemeContextValue = {
   mode: ThemeMode;
+  fonts: {
+    display: string;
+    body: string;
+    mono: string;
+  };
   colors: {
     background: string;
     surface: string;
@@ -23,9 +28,10 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const BRAND_FONTS = { display: "Georgia", body: "System", mono: "monospace" };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("dark");
+  const [mode, setModeState] = useState<ThemeMode>("light");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -67,7 +73,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   if (!loaded) return null;
 
   return (
-    <ThemeContext.Provider value={{ mode, colors, setMode, toggleMode }}>
+    <ThemeContext.Provider value={{ mode, colors, fonts: BRAND_FONTS, setMode, toggleMode }}>
       {children}
     </ThemeContext.Provider>
   );

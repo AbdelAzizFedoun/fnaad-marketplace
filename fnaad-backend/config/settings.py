@@ -22,9 +22,8 @@ mimetypes.add_type("image/webp", ".webp")
 load_dotenv()
 
 for setting_name in (
-    "CAMPAY_USERNAME",
-    "CAMPAY_PASSWORD",
-    "CAMPAY_WEBHOOK_KEY",
+    "FAPSHI_APIUSER",
+    "FAPSHI_APIKEY",
     "SUBSCRIPTION_PRICE_1_MONTH",
     "SUBSCRIPTION_PRICE_2_MONTHS",
     "SUBSCRIPTION_PRICE_3_MONTHS",
@@ -54,6 +53,7 @@ SECRET_KEY = os.getenv(
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "false").lower() in {"1", "true", "yes"}
+SERVE_MEDIA = os.getenv("SERVE_MEDIA", "false").lower() in {"1", "true", "yes"}
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'social',
     'orders',
     'billing',
+    'subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -263,9 +264,12 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 for _origin in [
-    "https://fnaad-admin.onrender.com",
+    "http://10.0.251.236:5173",
+    "http://10.0.251.236:8000",
     "http://localhost:5173",
-    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
 ]:
     if _origin not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(_origin)
@@ -279,13 +283,17 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "CSRF_TRUSTED_ORIGINS",
-        "http://localhost:8000,http://127.0.0.1:8000"
+        "http://localhost:5173,http://localhost:8000"
     ).split(",")
     if origin.strip()
 ]
 for _csrf in [
-    "https://fnaad-admin.onrender.com",
-    "https://fnaad-marketplace-api.onrender.com",
+    "http://10.0.251.143:5173",
+    "http://10.0.251.143:8000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
 ]:
     if _csrf not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_csrf)
@@ -312,17 +320,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # that builds share links reads from here, nothing else needs to change.
 SITE_BASE_URL = os.getenv("SITE_BASE_URL", "http://localhost:8000")
 
-# CamPay secrets stay on the server; never copy them into the Expo app.
+# Fapshi credentials stay on the server; never copy them into the Expo app.
 # They are read from the environment only — they were once hardcoded
 # here as fallbacks, which put live payment credentials into source.
-CAMPAY_BASE_URL = os.getenv("CAMPAY_BASE_URL", "https://demo.campay.net/api")
-CAMPAY_USERNAME = os.environ.get("CAMPAY_USERNAME", "")
-CAMPAY_PASSWORD = os.environ.get("CAMPAY_PASSWORD", "")
-CAMPAY_WEBHOOK_KEY = os.environ.get("CAMPAY_WEBHOOK_KEY", "")
+FAPSHI_BASE_URL = os.getenv("FAPSHI_BASE_URL", "https://sandbox.fapshi.com")
+FAPSHI_APIUSER = os.environ.get("FAPSHI_APIUSER", "")
+FAPSHI_APIKEY = os.environ.get("FAPSHI_APIKEY", "")
 
-SUBSCRIPTION_PRICE_1_MONTH = int(os.getenv("SUBSCRIPTION_PRICE_1_MONTH", "7"))
-SUBSCRIPTION_PRICE_2_MONTHS = int(os.getenv("SUBSCRIPTION_PRICE_2_MONTHS", "11"))
-SUBSCRIPTION_PRICE_3_MONTHS = int(os.getenv("SUBSCRIPTION_PRICE_3_MONTHS", "22"))
+SUBSCRIPTION_PRICE_1_MONTH = int(os.getenv("SUBSCRIPTION_PRICE_1_MONTH", "2000"))
+SUBSCRIPTION_PRICE_2_MONTHS = int(os.getenv("SUBSCRIPTION_PRICE_2_MONTHS", "4000"))
+SUBSCRIPTION_PRICE_3_MONTHS = int(os.getenv("SUBSCRIPTION_PRICE_3_MONTHS", "6500"))
 
 SUBSCRIPTION_PLANS = [
     {"id": 1, "duration_months": 1, "price_xaf": SUBSCRIPTION_PRICE_1_MONTH},

@@ -1,4 +1,4 @@
-$BaseUrl = "http://127.0.0.1:8000"
+$BaseUrl = "http://10.128.26.133:8000"
 
 $ApproveProductId = 29
 $RejectProductId  = 30

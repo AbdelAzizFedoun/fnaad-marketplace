@@ -10,7 +10,7 @@ $pgBin = "C:\Users\FEDOUN ABDEL-AZIZ\pgsql\pgsql\bin"
 $pgData = "C:\Users\FEDOUN ABDEL-AZIZ\pgsql\data"
 $pgLog = "C:\Users\FEDOUN ABDEL-AZIZ\pgsql\pg.log"
 $ngrok = "C:\Users\FEDOUN ABDEL-AZIZ\AppData\Roaming\npm\node_modules\ngrok\bin\ngrok.exe"
-$siteUrl = "https://guidable-speckled-pantyhose.ngrok-free.dev"
+$siteUrl = "https://4115-51-178-86-160.ngrok-free.app"
 
 function Set-EnvValue {
     param([string]$Path, [string]$Name, [string]$Value)
@@ -51,24 +51,35 @@ if ($backendRunning) {
 }
 Start-Sleep -Seconds 6
 
-# 3. ngrok tunnel — reuse if already up, otherwise start (free tier reuses your URL)
+# 3. ngrok tunnel — reuse if already up, otherwise start
 $tunnelUp = $false
 try {
     $t = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -TimeoutSec 3
-    $tunnelUp = $t.tunnels.Count -gt 0
+    if ($t.tunnels.Count -gt 0) {
+        $siteUrl = $t.tunnels[0].public_url
+        $tunnelUp = $true
+    }
 } catch { }
+
 if ($tunnelUp) {
     Write-Host "ngrok: already tunneling at $siteUrl"
 } else {
     Start-Process $ngrok -ArgumentList "http", "8000"
-    Write-Host "ngrok: starting tunnel at $siteUrl"
+    Start-Sleep -Seconds 5
+    try {
+        $t = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -TimeoutSec 3
+        if ($t.tunnels.Count -gt 0) {
+            $siteUrl = $t.tunnels[0].public_url
+        }
+    } catch { }
+    Write-Host "ngrok: started tunnel at $siteUrl"
 }
-Start-Sleep -Seconds 4
 
-# 4. Point both frontends at the public ngrok URL
+# 4. Point both frontends and backend at the public ngrok URL
 Set-EnvValue "$workspaceRoot\fnaad-frontend\.env" "EXPO_PUBLIC_API_BASE_URL" "$siteUrl/api"
 Set-EnvValue "$workspaceRoot\fnaad-frontend\.env" "EXPO_PUBLIC_API_ORIGIN" $siteUrl
 Set-EnvValue "$workspaceRoot\fnaad-admin\.env" "VITE_API_BASE_URL" "$siteUrl/api"
+Set-EnvValue "$workspaceRoot\fnaad-backend\.env" "SITE_BASE_URL" $siteUrl
 
 Write-Host ""
 Write-Host "Ready:"

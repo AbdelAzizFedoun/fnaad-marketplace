@@ -122,7 +122,7 @@ export default function ConversationsListScreen() {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={load} style={styles.retryBtn}>
-            <Text style={styles.retryBtnText}>Retry</Text>
+            <Text style={styles.retryBtnText}>{t("retry")}</Text>
           </Pressable>
         </View>
       </View>

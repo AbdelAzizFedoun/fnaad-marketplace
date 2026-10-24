@@ -63,6 +63,7 @@ export default function ArtistHubScreen() {
       <MenuRow icon="add-circle-outline" label={t("addProduct")} onPress={() => router.push("/add-product")} colors={colors} />
       <MenuRow icon="images-outline" label={t("myProducts")} onPress={() => router.push("/my-products")} colors={colors} />
       <MenuRow icon="bar-chart-outline" label={t("myAnalytics")} onPress={() => router.push("/artist-analytics")} colors={colors} />
+      <MenuRow icon="star-outline" label={t("spotlightApproval")} onPress={() => router.push("/artist-spotlight")} colors={colors} />
       <MenuRow icon="clipboard-outline" label={t("openRequests")} onPress={() => router.push("/browse-commissions")} colors={colors} />
       <MenuRow icon="brush-outline" label={t("editProfile")} onPress={() => router.push("/edit-artist-profile")} colors={colors} />
     </ScrollView>

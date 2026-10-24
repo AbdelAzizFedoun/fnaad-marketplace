@@ -4,7 +4,7 @@ const normalizeApiBaseUrl = (raw?: string) => {
   // Strip all whitespace, accidental newlines, or spaces
   const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
   if (!sanitized) {
-    return "https://fnaad-marketplace-api.onrender.com/api";
+    return "http://localhost:8000/api";
   }
   return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
@@ -27,7 +27,7 @@ api.interceptors.request.use((config) => {
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (config.headers) {
+  if (API_BASE_URL.includes("ngrok") && config.headers) {
     config.headers["ngrok-skip-browser-warning"] = "true";
   }
   return config;
@@ -93,8 +93,8 @@ function clearSession() {
   if (refreshToken) {
     // Blacklist server-side so the token can no longer
     // mint access tokens (real logout, not just local).
-    axios
-      .post(`${API_BASE_URL}/token/blacklist/`, { refresh: refreshToken })
+    api
+      .post("/token/blacklist/", { refresh: refreshToken })
       .catch(() => {});
   }
   localStorage.removeItem("fnaad_admin_access");
@@ -106,13 +106,15 @@ function clearSession() {
 
 // ---- Auth ----
 export const login = (email: string, password: string) =>
-  axios.post(`${API_BASE_URL}/token/`, { email, password });
+  api.post("/token/", { email, password });
 
 export const getMe = () => api.get("/accounts/me/");
 
 // ---- Admin dashboard ----
 export const getAdminDashboard = () => api.get("/catalog/admin/dashboard/");
 export const getRegistrationStats = () => api.get("/catalog/admin/registrations/");
+export const getAdminSpotlightFeatures = () => api.get("/catalog/admin/spotlight/");
+export const approveAdminSpotlight = (id: number) => api.post(`/catalog/admin/spotlight/${id}/approve/`);
 
 // ---- Moderation ----
 export const getPendingProducts = () => api.get("/catalog/products/pending/");
@@ -154,7 +156,6 @@ export const resolveMediaUrl = (path?: string | null) => {
 
 export const fetchMediaBlob = async (uri: string, signal: AbortSignal) => {
   const response = await fetch(uri, {
-    headers: { "ngrok-skip-browser-warning": "true" },
     signal,
   });
   if (!response.ok) {
@@ -176,4 +177,12 @@ export const fetchMediaBlob = async (uri: string, signal: AbortSignal) => {
   }
 
   return new Blob([blob], { type: imageType });
+};
+
+export const adminApi = {
+  getFlaggedCopies: () => api.get('/admin/flagged-copies/'),
+  confirmCopy: (id: number) => api.patch(`/admin/flagged-copies/${id}/confirm/`),
+  overruleCopy: (id: number) => api.patch(`/admin/flagged-copies/${id}/overrule/`),
+  getEvidenceReviews: () => api.get('/admin/evidence-review/'),
+  decideEvidence: (id: number, approved: boolean) => api.patch(`/admin/evidence-review/${id}/decision/`, { approved }),
 };

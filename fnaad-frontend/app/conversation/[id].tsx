@@ -410,12 +410,14 @@ function ConversationHeader({
   colors,
   topInset,
   onMenuPress,
+  onCall,
 }: {
   conversation: ConversationData;
   isCustomer: boolean;
   colors: any;
   topInset: number;
   onMenuPress?: () => void;
+  onCall?: () => void;
 }) {
   const router = useRouter();
   const { t } = useLanguage();
@@ -453,7 +455,12 @@ function ConversationHeader({
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
       </View>
-      <Pressable hitSlop={10} style={styles.headerIconBtn} onPress={onMenuPress}>
+      {onCall && (
+        <Pressable hitSlop={10} style={styles.headerIconBtn} onPress={onCall} accessibilityLabel={`Call ${displayName}`}>
+          <Ionicons name="call-outline" size={20} color={colors.accent} />
+        </Pressable>
+      )}
+      <Pressable hitSlop={10} style={styles.headerIconBtn} onPress={onMenuPress} accessibilityLabel="Conversation menu">
         <Ionicons name="ellipsis-vertical" size={20} color={colors.textMuted} />
       </Pressable>
     </View>
@@ -767,7 +774,22 @@ export default function ConversationScreen() {
   const recorderState = voiceRecorder.state;
   const [sendingVoice, setSendingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [voiceElapsed, setVoiceElapsed] = useState(0);
+  const [voiceCanceling, setVoiceCanceling] = useState(false);
+  const voiceHoldRef = useRef(false);
+  const voiceCancelRef = useRef(false);
+  const voiceStartXRef = useRef(0);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!recorderState.isRecording) {
+      setVoiceElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = setInterval(() => setVoiceElapsed(Math.floor((Date.now() - startedAt) / 1000)), 250);
+    return () => clearInterval(timer);
+  }, [recorderState.isRecording]);
 
   const isCustomer = conversation?.customer_username === user?.username;
   const isArtist = user?.is_artist && !isCustomer;
@@ -844,7 +866,8 @@ export default function ConversationScreen() {
     }
   };
 
-  const toggleVoiceRecording = async () => {
+  const startVoiceRecording = async (event?: any) => {
+    if (voiceHoldRef.current || sendingVoice) return;
     if (!voiceRecorder.available || !recorder) {
       const message = Platform.OS === "web"
         ? "Voice recording is unavailable. Refresh this page and allow microphone access."
@@ -855,14 +878,10 @@ export default function ConversationScreen() {
     }
     setVoiceError("");
     try {
-      if (recorderState.isRecording) {
-        setSendingVoice(true);
-        await recorder.stop();
-        if (!recorder.uri) throw new Error("The browser did not create a recording. Check microphone access and try again.");
-        await sendAudioMessage(Number(id), recorder.uri);
-        loadConversation();
-        return;
-      }
+      voiceHoldRef.current = true;
+      voiceCancelRef.current = false;
+      setVoiceCanceling(false);
+      voiceStartXRef.current = event?.nativeEvent?.pageX || 0;
       const permission = await ExpoAudio.requestRecordingPermissionsAsync();
       if (!permission.granted) {
         throw new Error("Allow microphone access in your browser settings to record a voice note.");
@@ -876,7 +895,39 @@ export default function ConversationScreen() {
       if (Platform.OS === "web") setVoiceError(message);
       else Alert.alert("Voice note", message);
     } finally {
+      if (!voiceHoldRef.current) setSendingVoice(false);
+    }
+  };
+
+  const finishVoiceRecording = async () => {
+    if (!voiceHoldRef.current || !recorderState.isRecording) return;
+    voiceHoldRef.current = false;
+    const cancelled = voiceCancelRef.current;
+    voiceCancelRef.current = false;
+    setVoiceCanceling(false);
+    setSendingVoice(true);
+    try {
+      await recorder.stop();
+      if (!cancelled && recorder.uri) {
+        await sendAudioMessage(Number(id), recorder.uri);
+        loadConversation();
+      }
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || error.response?.data?.audio?.[0] || error.message;
+      const message = detail || "Unable to send this voice note. Please try again.";
+      if (Platform.OS === "web") setVoiceError(message);
+      else Alert.alert("Voice note", message);
+    } finally {
       setSendingVoice(false);
+    }
+  };
+
+  const moveVoiceRecording = (event: any) => {
+    if (!voiceHoldRef.current || !recorderState.isRecording) return;
+    const currentX = event?.nativeEvent?.pageX || voiceStartXRef.current;
+    if (voiceStartXRef.current - currentX > 80) {
+      voiceCancelRef.current = true;
+      setVoiceCanceling(true);
     }
   };
 
@@ -1355,7 +1406,19 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
       <View style={styles.desktopShell}>
       {layout.isDesktop && <DesktopInbox activeId={Number(id)} colors={colors} />}
       <View style={styles.workspace}>
-      <ConversationHeader conversation={conversation} isCustomer={isCustomer} colors={colors} topInset={insets.top} onMenuPress={() => setMenuVisible(true)} />
+      <ConversationHeader
+        conversation={conversation}
+        isCustomer={isCustomer}
+        colors={colors}
+        topInset={insets.top}
+        onMenuPress={() => setMenuVisible(true)}
+        onCall={(() => {
+          const phone = conversation.contact?.viewer_is_customer
+            ? conversation.contact.artist.phone_number
+            : conversation.contact?.customer.phone_number;
+          return phone ? () => openDial(phone) : undefined;
+        })()}
+      />
 
       <View style={styles.subHeader}>
         <Text style={styles.headerStatus}>{t(conversation.status)}</Text>
@@ -1570,6 +1633,21 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         </View>
       )}
 
+      {recorderState.isRecording && (
+        <View style={styles.voiceRecordingBar}>
+          <View style={styles.voiceRecordingPulse}>
+            <Ionicons name="mic" size={17} color="#FFFFFF" />
+          </View>
+          <View style={styles.voiceRecordingCopy}>
+            <Text style={styles.voiceRecordingTitle}>Recording voice note</Text>
+            <Text style={styles.voiceRecordingHint}>
+              {voiceCanceling ? "Release to cancel" : "Slide left to cancel · release to send"}
+            </Text>
+          </View>
+          <Text style={styles.voiceRecordingTime}>{`${Math.floor(voiceElapsed / 60)}:${String(voiceElapsed % 60).padStart(2, "0")}`}</Text>
+        </View>
+      )}
+
       <View style={styles.inputRow}>
         <Pressable style={styles.attachBtn} hitSlop={8} onPress={() => setAttachVisible(true)}>
           <Ionicons name="add-circle-outline" size={26} color={colors.textMuted} />
@@ -1581,18 +1659,21 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
             recorderState.isRecording && styles.recordBtnActive,
           ]}
           hitSlop={8}
-          onPress={() => { void toggleVoiceRecording(); }}
+          onLongPress={(event) => { void startVoiceRecording(event); }}
+          onPressOut={() => { void finishVoiceRecording(); }}
+          onPressMove={moveVoiceRecording}
           disabled={sendingVoice}
-          accessibilityLabel={recorderState.isRecording ? "Stop and send voice note" : "Record voice note"}
+          delayLongPress={350}
+          accessibilityLabel="Hold to record a voice note. Release to send."
           accessibilityRole="button"
           accessibilityState={{ disabled: sendingVoice, selected: recorderState.isRecording }}
         >
           {sendingVoice ? <ActivityIndicator size="small" color={colors.accentText} /> : (
             <>
-              <Ionicons name={recorderState.isRecording ? "stop" : "mic"} size={20} color={recorderState.isRecording ? "#FFFFFF" : colors.accent} />
+              <Ionicons name={recorderState.isRecording ? "radio" : "mic"} size={20} color={recorderState.isRecording ? "#FFFFFF" : colors.accent} />
               {Platform.OS === "web" && (
                 <Text style={[styles.recordBtnText, recorderState.isRecording && styles.recordBtnTextActive]}>
-                  {recorderState.isRecording ? "Stop & send" : "Record audio"}
+                  {recorderState.isRecording ? (voiceCancelRef.current ? "Release to cancel" : "Release to send") : "Hold to record"}
                 </Text>
               )}
             </>
@@ -2086,6 +2167,12 @@ function createStyles(
       color: colors.text, fontSize: 12, marginTop: 10, marginBottom: 10, minHeight: 60, textAlignVertical: "top",
     },
     inputRow: { flexDirection: "row", paddingHorizontal: layout.isTablet ? 16 : 10, paddingTop: 10, paddingBottom: Math.max(12, bottomInset), borderTopWidth: 1, borderTopColor: colors.border, alignItems: "flex-end", backgroundColor: colors.surface, gap: 8 },
+    voiceRecordingBar: { flexDirection: "row", alignItems: "center", marginHorizontal: layout.isTablet ? 16 : 10, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: DANGER, gap: 10 },
+    voiceRecordingPulse: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.2)" },
+    voiceRecordingCopy: { flex: 1 },
+    voiceRecordingTitle: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+    voiceRecordingHint: { color: "rgba(255,255,255,0.82)", fontSize: 11, marginTop: 2 },
+    voiceRecordingTime: { color: "#FFFFFF", fontSize: 13, fontWeight: "800", fontVariant: ["tabular-nums"] },
     attachBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
     recordBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.accent },
     webRecordBtn: { width: 118, flexDirection: "row", gap: 7, paddingHorizontal: 10 },

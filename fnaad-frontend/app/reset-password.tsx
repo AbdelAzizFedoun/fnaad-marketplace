@@ -5,6 +5,7 @@ import React from "react";
 import { confirmPasswordReset, requestPasswordReset } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { useLanguage } from "../context/LanguageContext";
 
 const CODE_REGEX = /^\d{6}$/;
 
@@ -12,6 +13,7 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const layout = useResponsiveLayout();
   const styles = createStyles(colors, layout);
 
@@ -78,14 +80,14 @@ export default function ResetPasswordScreen() {
     <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <View style={styles.form}>
-        <Text style={styles.title}>Reset password</Text>
+        <Text style={styles.title}>{t("resetPassword")}</Text>
         <Text style={styles.subtitle}>Enter the code sent to your email, then choose a new password.</Text>
 
         {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
 
         <TextInput
           style={styles.field}
-          placeholder="Email"
+          placeholder={t("email")}
           placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}
@@ -95,7 +97,7 @@ export default function ResetPasswordScreen() {
 
         <TextInput
           style={styles.field}
-          placeholder="6-digit code"
+          placeholder={t("code6Digits")}
           placeholderTextColor={colors.textMuted}
           value={code}
           onChangeText={setCode}
@@ -105,7 +107,7 @@ export default function ResetPasswordScreen() {
 
         <TextInput
           style={styles.field}
-          placeholder="New password"
+          placeholder={t("newPassword")}
           placeholderTextColor={colors.textMuted}
           value={newPassword}
           onChangeText={setNewPassword}
@@ -114,7 +116,7 @@ export default function ResetPasswordScreen() {
 
         <TextInput
           style={styles.field}
-          placeholder="Confirm new password"
+          placeholder={t("confirmNewPassword")}
           placeholderTextColor={colors.textMuted}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
@@ -122,15 +124,15 @@ export default function ResetPasswordScreen() {
         />
 
         <Pressable style={styles.btn} onPress={handleReset} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? "..." : "Reset password"}</Text>
+          <Text style={styles.btnText}>{loading ? "..." : t("resetPassword")}</Text>
         </Pressable>
 
         <Pressable onPress={handleResendCode} disabled={resending}>
-          <Text style={styles.link}>{resending ? "Sending..." : "Send a new code"}</Text>
+          <Text style={styles.link}>{resending ? "..." : t("sendNewCode")}</Text>
         </Pressable>
 
         <Pressable onPress={() => router.replace("/login")}>
-          <Text style={styles.backLink}>Back to login</Text>
+          <Text style={styles.backLink}>{t("backToLogin")}</Text>
         </Pressable>
       </View>
       </ScrollView>

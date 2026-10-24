@@ -5,12 +5,14 @@ import React from "react";
 import { requestPasswordReset } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
+import { useLanguage } from "../context/LanguageContext";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const layout = useResponsiveLayout();
   const styles = createStyles(colors, layout);
 
@@ -45,7 +47,7 @@ export default function ForgotPasswordScreen() {
     <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <View style={styles.form}>
-        <Text style={styles.title}>Forgot password?</Text>
+        <Text style={styles.title}>{t("forgotPassword")}</Text>
         <Text style={styles.subtitle}>
           Enter the email linked to your account. We will send you a code to reset your password.
         </Text>
@@ -54,7 +56,7 @@ export default function ForgotPasswordScreen() {
 
         <TextInput
           style={styles.field}
-          placeholder="Email"
+          placeholder={t("email")}
           placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}
@@ -63,11 +65,11 @@ export default function ForgotPasswordScreen() {
         />
 
         <Pressable style={styles.btn} onPress={handleSubmit} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? "..." : "Send code"}</Text>
+          <Text style={styles.btnText}>{loading ? "..." : t("sendCode")}</Text>
         </Pressable>
 
         <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/login")}>
-          <Text style={styles.backLink}>Back to login</Text>
+          <Text style={styles.backLink}>{t("backToLogin")}</Text>
         </Pressable>
       </View>
       </ScrollView>

@@ -3,7 +3,7 @@ import Image from "../components/MediaImage";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { createProduct, uploadProductImage } from "../services/api";
+import { createProduct, uploadProductImage, uploadCreationEvidence } from "../services/api";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
@@ -27,6 +27,8 @@ const CATEGORIES = [
 ];
 
 const MAX_IMAGES = 6;
+const CREATION_METHODS = ["original", "commissioned", "licensed", "reproduction", "collaboration", "ai_assisted"];
+const MOODS = ["calm", "joyful", "spiritual", "african_heritage", "luxury", "bold", "minimal", "home_decor"];
 type SelectedImage = Pick<ImagePicker.ImagePickerAsset, "uri" | "fileName" | "mimeType" | "file">;
 
 export default function AddProductScreen() {
@@ -41,6 +43,9 @@ export default function AddProductScreen() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("other");
   const [images, setImages] = useState<SelectedImage[]>([]);
+  const [creationMethod, setCreationMethod] = useState("original");
+  const [moods, setMoods] = useState<string[]>([]);
+  const [evidence, setEvidence] = useState<SelectedImage[]>([]);
   const [createdProductId, setCreatedProductId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,6 +80,13 @@ export default function AddProductScreen() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const pickEvidence = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsMultipleSelection: true, selectionLimit: 5 });
+    if (!result.canceled) setEvidence(result.assets.map(({ uri, fileName, mimeType, file }) => ({ uri, fileName, mimeType, file })));
+  };
+
   const handleSubmit = async () => {
     setErrorMsg("");
 
@@ -91,26 +103,57 @@ export default function AddProductScreen() {
     setLoading(true);
     try {
       let productId = createdProductId;
+      let productStatus = "pending";
       if (!productId) {
         const res = await createProduct({
           title: title.trim(),
           description: description.trim(),
           price_xaf: priceNumber,
           category,
+          creation_method: creationMethod,
+          moods,
         });
         productId = res.data.id;
+        productStatus = res.data.status;
         setCreatedProductId(productId);
       }
 
       await Promise.all(images.map((image, index) => uploadProductImage(productId!, image, index, index === 0)));
-      router.push("/");
+      if (evidence.length) await Promise.all(evidence.map((item) => uploadCreationEvidence(productId!, item)));
+
+      if (productStatus === "pending") {
+        Alert.alert(
+          "Artwork Submitted",
+          `"${title.trim()}" has been submitted for review. It will be published as soon as an administrator approves it.`,
+          [{ text: "OK", onPress: () => router.push("/my-products") }]
+        );
+      } else {
+        Alert.alert(
+          "Artwork Published",
+          `"${title.trim()}" is now published!`,
+          [{ text: "OK", onPress: () => router.push("/my-products") }]
+        );
+      }
     } catch (err: any) {
       console.log("Product or image upload error:", err.response?.data || err.message);
-      Alert.alert(t("genericError"), t("genericError"));
+      const data = err.response?.data;
+      const errorText =
+        (typeof data === "string" ? data : null) ||
+        data?.detail ||
+        data?.rejection_reason ||
+        (Array.isArray(data?.image) ? data.image[0] : null) ||
+        (Array.isArray(data?.title) ? data.title[0] : null) ||
+        (Array.isArray(data?.price_xaf) ? data.price_xaf[0] : null) ||
+        err.message ||
+        t("genericError");
+
+      setErrorMsg(errorText);
+      Alert.alert("Error", errorText);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <View style={styles.container}>
@@ -129,6 +172,14 @@ export default function AddProductScreen() {
           />
         </View>
 
+        <View style={styles.fieldGroup}><Text style={styles.label}>What feeling does this artwork bring?</Text><View style={styles.chipsWrap}>{MOODS.map((mood) => <Pressable key={mood} style={[styles.chip, moods.includes(mood) && styles.chipSelected]} onPress={() => setMoods((current) => current.includes(mood) ? current.filter((value) => value !== mood) : [...current, mood])}><Text style={[styles.chipText, moods.includes(mood) && styles.chipTextSelected]}>{mood.replace("_", " ")}</Text></Pressable>)}</View><Text style={styles.helper}>Choose up to three moods to help visitors discover your artwork.</Text></View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>{t("creationMethodLabel")}</Text>
+          <View style={styles.chipsWrap}>{CREATION_METHODS.map((method) => <Pressable key={method} style={[styles.chip, creationMethod === method && styles.chipSelected]} onPress={() => setCreationMethod(method)}><Text style={[styles.chipText, creationMethod === method && styles.chipTextSelected]}>{method.replace("_", " ")}</Text></Pressable>)}</View>
+          <Text style={styles.helper}>{t("passportHint")}</Text>
+        </View>
+
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t("descriptionField")}</Text>
           <TextInput
@@ -140,6 +191,8 @@ export default function AddProductScreen() {
             multiline
           />
         </View>
+
+        <View style={styles.fieldGroup}><Text style={styles.label}>{t("creationEvidenceLabel")}</Text><Text style={styles.helper}>{t("creationEvidenceHint")}</Text><Pressable style={styles.evidencePicker} onPress={pickEvidence}><Ionicons name="document-attach-outline" size={22} color={colors.accent} /><Text style={styles.evidenceText}>{evidence.length ? `${evidence.length} ${t("evidenceSelected")}` : t("addEvidence")}</Text></Pressable></View>
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t("priceField")}</Text>
@@ -255,6 +308,9 @@ function createStyles(
       justifyContent: "center", alignItems: "center", marginBottom: 16, backgroundColor: colors.surface,
     },
     imagePickerText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
+    helper: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 6 },
+    evidencePicker: { flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginTop: 9, backgroundColor: colors.surface },
+    evidenceText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
     btn: { backgroundColor: colors.accent, borderRadius: 12, padding: 16, alignItems: "center", marginTop: 8, ...shadow(3) },
     btnText: { color: colors.accentText, fontWeight: "700", fontSize: 15, letterSpacing: 0.3 },
   });

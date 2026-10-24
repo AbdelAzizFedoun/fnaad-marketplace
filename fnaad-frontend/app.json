@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "fnaad-frontend",
@@ -5,11 +6,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "userInterfaceStyle": "light",
     "scheme": "fnaad",
     "ios": {
@@ -67,12 +63,17 @@
         }
       ],
       [
-      "expo-location",
+        "expo-location",
         {
           "locationWhenInUsePermission": "FNAAD utilise votre position uniquement lorsque vous la partagez dans une conversation."
         }
       ],
-      ["expo-audio", {"microphonePermission": "FNAAD uses your microphone only to record voice notes you choose to send."}],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "FNAAD uses your microphone only to record voice notes you choose to send."
+        }
+      ],
       "expo-font",
       "expo-sharing",
       [
@@ -81,6 +82,16 @@
           "android": {
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
         }
       ]
     ],

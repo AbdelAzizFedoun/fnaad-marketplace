@@ -12,6 +12,6 @@ admin.site.register(Subscription, SubscriptionAdmin)
 
 @admin.register(SubscriptionPayment)
 class SubscriptionPaymentAdmin(admin.ModelAdmin):
-    list_display = ("external_reference", "subscription", "amount_xaf", "status", "campay_reference", "created_at")
+    list_display = ("external_reference", "subscription", "amount_xaf", "status", "provider_transaction_id", "created_at")
     list_filter = ("status",)
-    search_fields = ("external_reference", "campay_reference", "phone_number")
+    search_fields = ("external_reference", "provider_transaction_id", "phone_number")

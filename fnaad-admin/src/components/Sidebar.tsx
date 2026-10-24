@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: "/subscriptions", label: "Subscriptions", icon: "AB" },
   { to: "/reports", label: "Reports", icon: "SI" },
   { to: "/registrations", label: "Registrations", icon: "RG" },
+  { to: "/spotlight", label: "Spotlight", icon: "SP" },
 ];
 
 export default function Sidebar() {

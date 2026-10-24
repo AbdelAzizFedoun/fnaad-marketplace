@@ -17,7 +17,7 @@ from pathlib import Path
 import os
 import uuid
 from datetime import timedelta
-from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings
+from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature
 from social.models import Comment
 from social.models import Comment, Like
 from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer, SanaaArtistRecommendationSerializer
@@ -48,15 +48,16 @@ class StandardResultsPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
-from accounts.models import ArtistProfile
+from accounts.models import ArtistProfile, ArtistFollow
 from .models import Product, ProductImage, Conversation, Message
-from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer
-from .image_utils import generate_product_thumbnail
+from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, CreationEvidenceSerializer
+from .image_utils import generate_product_thumbnail, compute_image_hashes
+from .duplication import find_potential_copy
 from accounts.push import send_push_notification, create_notification
 from .permissions import IsSuperAdmin
 
 def product_public_view(request, slug):
-    product = get_object_or_404(Product, public_slug=slug, status="approved")
+    product = get_object_or_404(Product, public_slug=slug, status="approved", is_public_visible=True)
     images = list(product.images.all())
     primary_image = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     image_url = request.build_absolute_uri(primary_image.image.url) if primary_image else None
@@ -74,14 +75,28 @@ def user_is_artist(user):
     return bool(
         user
         and user.is_authenticated
-        and getattr(user, "role", None) == user.ROLE_ARTIST
+        and (
+            getattr(user, "role", None) in (user.ROLE_ARTIST, user.ROLE_SUPERADMIN)
+            or getattr(user, "is_artist", False)
+            or hasattr(user, "artist_profile")
+        )
     )
 
 
 def get_artist_profile_for_user(user):
     if not user_is_artist(user):
         return None
-    return getattr(user, "artist_profile", None)
+    profile = getattr(user, "artist_profile", None)
+    if profile is None:
+        profile, _ = ArtistProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                "brand_name": user.username or (user.email.split("@")[0] if user.email else "Artist"),
+                "mobile_money_number": user.phone_number or "0000000000",
+                "mobile_money_provider": "orange",
+            },
+        )
+    return profile
 
 
 def conversations_visible_to_user(user):
@@ -142,9 +157,11 @@ class ProductListView(generics.ListAPIView):
             "comments",
         )
 
+        now = timezone.now()
         queryset = queryset.filter(
-            models.Q(artist__subscription__status=Subscription.STATUS_TRIAL, artist__subscription__trial_end_date__gte=now)
-            | models.Q(artist__subscription__status=Subscription.STATUS_ACTIVE, artist__subscription__current_period_end__gte=now)
+            is_public_visible=True
+        ).filter(
+            models.Q(public_visibility_expires_at__isnull=True) | models.Q(public_visibility_expires_at__gte=now)
         )
 
         region = self.request.query_params.get("region")
@@ -154,6 +171,10 @@ class ProductListView(generics.ListAPIView):
         category = self.request.query_params.get("category")
         if category:
             queryset = queryset.filter(category=category)
+
+        mood = self.request.query_params.get("mood")
+        if mood:
+            queryset = queryset.filter(moods__contains=[mood])
 
         search = self.request.query_params.get("search")
         if search:
@@ -179,6 +200,37 @@ class ProductListView(generics.ListAPIView):
             queryset = queryset.order_by("-created_at")
 
         return queryset
+
+
+class SpotlightListView(generics.ListAPIView):
+    """Active artist- and admin-approved 24-hour showcase stories."""
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    serializer_class = ProductSerializer
+
+    def get_queryset(self):
+        now = timezone.now()
+        return Product.objects.filter(
+            status=Product.STATUS_APPROVED,
+            is_public_visible=True,
+            artist__is_suspended=False,
+            spotlight_feature__artist_approved=True,
+            spotlight_feature__admin_approved=True,
+            spotlight_feature__starts_at__lte=now,
+            spotlight_feature__expires_at__gt=now,
+        ).select_related("artist", "artist__user").prefetch_related("images").annotate(
+            avg_rating=Coalesce(Avg("reviews__rating"), 0.0),
+            delivered_review_count=Count("reviews", distinct=True),
+        ).order_by("-avg_rating", "-delivered_review_count")[:5]
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        ids = [item["id"] for item in response.data]
+        expiries = {item.product_id: item.expires_at for item in SpotlightFeature.objects.filter(product_id__in=ids)}
+        for item in response.data:
+            expiry = expiries.get(item["id"])
+            item["spotlight_expires_at"] = expiry.isoformat() if expiry else None
+        return response
 
 
 
@@ -225,15 +277,35 @@ class ProductCreateView(generics.CreateAPIView):
             Product.STATUS_PENDING if site_settings.require_product_approval else Product.STATUS_APPROVED
         )
 
-        serializer.save(artist=artist_profile, status=initial_status)
+        now = timezone.now()
+        serializer.save(
+            artist=artist_profile,
+            status=initial_status,
+            is_public_visible=(initial_status == Product.STATUS_APPROVED),
+            approved_at=now if initial_status == Product.STATUS_APPROVED else None,
+        )
 
         if initial_status == Product.STATUS_APPROVED:
-            send_push_notification(
-                self.request.user.expo_push_token,
-                title="Artwork published",
-                body=f"\"{serializer.instance.title}\" is now publicly visible.",
-                data={"type": "product_status", "product_id": serializer.instance.id, "status": "approved"},
-            )
+            try:
+                send_push_notification(
+                    self.request.user.expo_push_token,
+                    title="Artwork published",
+                    body=f"\"{serializer.instance.title}\" is now publicly visible.",
+                    data={"type": "product_status", "product_id": serializer.instance.id, "status": "approved"},
+                )
+            except Exception:
+                pass
+            for follow in ArtistFollow.objects.select_related("user").filter(artist=artist_profile):
+                try:
+                    create_notification(
+                        follow.user,
+                        "New artwork from an artist you follow",
+                        f'{artist_profile.brand_name} just published "{serializer.instance.title}".',
+                        "artist_new_product",
+                        {"product_id": serializer.instance.id, "artist_id": artist_profile.id},
+                    )
+                except Exception:
+                    logger.exception("Follower notification failed for product %s", serializer.instance.id)
 
 class PendingProductListView(generics.ListAPIView):
     """
@@ -252,6 +324,8 @@ class ProductApproveView(generics.UpdateAPIView):
     permission_classes = [IsSuperAdmin]
 
     def patch(self, request, *args, **kwargs):
+        from django.utils import timezone as tz
+
         product = self.get_object()
         new_status = request.data.get("status")
 
@@ -262,20 +336,38 @@ class ProductApproveView(generics.UpdateAPIView):
             )
 
         product.status = new_status
-        product.save()
 
-        artist_user = product.artist.user
         if new_status == Product.STATUS_APPROVED:
+            # Make the artwork immediately visible in the public gallery.
+            product.is_public_visible = True
+            product.approved_at = tz.now()
             title, body = "Artwork approved", f"\"{product.title}\" is now publicly visible."
         else:
+            # Rejected artworks must not appear in the gallery.
+            product.is_public_visible = False
+            product.approved_at = None
             title, body = "Artwork rejected", f"\"{product.title}\" was not approved."
 
+        product.save(update_fields=["status", "is_public_visible", "approved_at"])
+
         create_notification(
-            artist_user, title, body, "product_status",
+            product.artist.user, title, body, "product_status",
             {"product_id": product.id, "status": new_status},
         )
+        if new_status == Product.STATUS_APPROVED:
+            for follow in ArtistFollow.objects.select_related("user").filter(artist=product.artist):
+                try:
+                    create_notification(
+                        follow.user,
+                        "New artwork from an artist you follow",
+                        f'{product.artist.brand_name} just published "{product.title}".',
+                        "artist_new_product",
+                        {"product_id": product.id, "artist_id": product.artist_id},
+                    )
+                except Exception:
+                    logger.exception("Follower notification failed for product %s", product.id)
 
-        return Response(ProductSerializer(product).data)
+        return Response(ProductSerializer(product, context={"request": request}).data)
 
 
 class ProductImageUploadView(generics.CreateAPIView):
@@ -297,6 +389,115 @@ class ProductImageUploadView(generics.CreateAPIView):
 
         product_image = serializer.save(product=product)
         generate_product_thumbnail(product_image)
+        # Compute hashes
+        try:
+            if product_image.image:
+                phash, dhash, sha256 = compute_image_hashes(product_image.image)
+                if phash or dhash or sha256:
+                    product_image.image_phash = phash
+                    product_image.image_dhash = dhash
+                    product_image.image_file_sha256 = sha256
+                    product_image.save(update_fields=["image_phash", "image_dhash", "image_file_sha256"])
+        except Exception:
+            pass
+
+        # Check for potential copies against approved products from other artists
+        try:
+            from .models import SiteSettings
+            site_settings = SiteSettings.get_solo()
+            # Scan every upload, including products that were auto-published
+            # when manual approval is disabled. A match must be unpublished
+            # immediately and routed to the admin copy-review queue.
+            if site_settings.block_near_duplicates:
+                orig_product, conf, reason = find_potential_copy(
+                    product_image,
+                    exclude_artist=artist_profile,
+                    threshold=8,
+                )
+                if orig_product and conf >= 0.85:
+                    product.status = Product.STATUS_PENDING
+                    product.is_public_visible = False
+                    product.approved_at = None
+                    product.flagged_as_copy = True
+                    product.copy_of = orig_product
+                    product.copy_confidence = float(conf)
+                    product.rejection_reason = (
+                        f"Your artwork was identified as a possible copy of \"{orig_product.title}\" by "
+                        f"{orig_product.artist.brand_name} (Product #{orig_product.id}) and is awaiting admin review."
+                    )
+                    product.save(
+                        update_fields=[
+                            "status",
+                            "is_public_visible",
+                            "approved_at",
+                            "flagged_as_copy",
+                            "copy_of",
+                            "copy_confidence",
+                            "rejection_reason",
+                        ]
+                    )
+                    ProductModerationEvent.objects.create(
+                        product=product, action=ProductModerationEvent.ACTION_FLAGGED_COPY,
+                        reason=product.rejection_reason,
+                        metadata={"matched_product_id": orig_product.id, "confidence": float(conf), "match_reason": reason},
+                    )
+                    try:
+                        create_notification(
+                            product.artist.user,
+                            "Artwork held for copyright review",
+                            product.rejection_reason,
+                            "copy_review",
+                            {"product_id": product.id, "status": Product.STATUS_PENDING, "flagged_as_copy": True},
+                        )
+                        # Notify the artist whose published work was matched.
+                        create_notification(
+                            orig_product.artist.user,
+                            "Your artwork may have been copied",
+                            f'Another submission was identified as a possible copy of "{orig_product.title}". '
+                            "FNAAD has sent it to the admin team for review.",
+                            "copyright_report",
+                            {"product_id": product.id, "original_product_id": orig_product.id, "status": "under_review"},
+                        )
+                        User = get_user_model()
+                        for admin_user in User.objects.filter(is_superuser=True, is_active=True):
+                            create_notification(
+                                admin_user,
+                                "New copyright report",
+                                f'A possible copy of "{orig_product.title}" was detected and requires review.',
+                                "copyright_report_admin",
+                                {"product_id": product.id, "original_product_id": orig_product.id, "status": "under_review"},
+                            )
+                        if hasattr(self.request.user, "expo_push_token") and self.request.user.expo_push_token:
+                            send_push_notification(
+                                self.request.user.expo_push_token,
+                                title="Artwork rejected",
+                                body=product.rejection_reason,
+                                data={
+                                    "type": "product_status",
+                                    "product_id": product.id,
+                                    "status": Product.STATUS_PENDING,
+                                },
+                            )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+
+class CreationEvidenceUploadView(generics.CreateAPIView):
+    serializer_class = CreationEvidenceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def perform_create(self, serializer):
+        product = get_object_or_404(Product, id=self.kwargs["product_id"])
+        artist_profile = get_artist_profile_for_user(self.request.user)
+        if not artist_profile or product.artist_id != artist_profile.id:
+            raise PermissionDenied("You cannot add evidence to this artwork.")
+        serializer.save(product=product)
+        if product.verification_level == Product.VERIFICATION_DECLARED:
+            product.verification_level = Product.VERIFICATION_EVIDENCE
+            product.save(update_fields=["verification_level"])
 
 
 class ProductDetailView(generics.RetrieveAPIView):
@@ -478,6 +679,13 @@ class SendMessageView(generics.CreateAPIView):
         else:
             body = f"{user.username}: {message.text[:80]}" if message.text else f"{user.username} sent you a message"
 
+        create_notification(
+            recipient,
+            title="New message",
+            body=body,
+            notification_type="message",
+            data={"conversation_id": conversation.id},
+        )
         send_push_notification(
             recipient.expo_push_token,
             title="New message",
@@ -551,6 +759,11 @@ class ConversationMessagesDeleteView(generics.GenericAPIView):
     def delete(self, request, pk):
         conversation = get_object_or_404(conversations_visible_to_user(request.user), id=pk)
         message_ids = request.data.get("message_ids")
+        if message_ids is None and request.query_params.get("message_ids"):
+            try:
+                message_ids = [int(value) for value in request.query_params.get("message_ids", "").split(",") if value.strip()]
+            except ValueError:
+                return Response({"message_ids": "Provide comma-separated message IDs."}, status=status.HTTP_400_BAD_REQUEST)
         messages = conversation.messages.filter(sender=request.user)
 
         if message_ids is not None:
@@ -677,18 +890,29 @@ class UpdateConversationStatusView(generics.UpdateAPIView):
             )
 
         conversation.status = new_status
-        conversation.save()
+        conversation.save(update_fields=["status"])
 
-        recipient = conversation.product.artist.user if is_customer else conversation.customer
+        # Auto-mark product as sold when delivered
+        if new_status == Conversation.STATUS_DELIVERED and conversation.product_id:
+            product = conversation.product
+            if not product.is_sold:
+                product.is_sold = True
+                if not product.sold_at:
+                    product.sold_at = timezone.now()
+                product.save(update_fields=["is_sold", "sold_at"])
+
+        artist = conversation_artist_profile(conversation)
+        recipient = (artist.user if artist else None) if is_customer else conversation.customer
         status_labels = dict(Conversation.STATUS_CHOICES) if hasattr(Conversation, "STATUS_CHOICES") else {}
         status_label = status_labels.get(new_status, new_status)
 
-        send_push_notification(
-            recipient.expo_push_token,
-            title="Order status updated",
-            body=f"The order is now: {status_label}",
-            data={"type": "order_status", "conversation_id": conversation.id, "status": new_status},
-        )
+        if recipient and getattr(recipient, "expo_push_token", None):
+            send_push_notification(
+                recipient.expo_push_token,
+                title="Order status updated",
+                body=f"The order is now: {status_label}",
+                data={"type": "order_status", "conversation_id": conversation.id, "status": new_status},
+            )
 
         return Response(ConversationSerializer(conversation).data)
 
@@ -1038,6 +1262,99 @@ class CreateReviewView(generics.CreateAPIView):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        review = serializer.save(customer=self.request.user)
+        conversation = review.conversation
+        product = review.product
+        if conversation.status == Conversation.STATUS_DELIVERED and product.status == Product.STATUS_APPROVED:
+            feature, created = SpotlightFeature.objects.get_or_create(product=product)
+            if created or not feature.artist_approved:
+                feature.artist_approved = False
+                feature.admin_approved = False
+                feature.starts_at = None
+                feature.expires_at = None
+                feature.save()
+                create_notification(
+                    product.artist.user,
+                    "Spotlight approval requested",
+                    f"Your artwork {product.title} is eligible for a 24-hour FNAAD Spotlight story. Review and approve it in Artist Space.",
+                    "spotlight_approval",
+                    {"product_id": product.id},
+                )
+
+
+class MySpotlightFeaturesView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return SpotlightFeature.objects.filter(product__artist__user=self.request.user).select_related("product", "product__artist")
+
+    def list(self, request, *args, **kwargs):
+        items = []
+        for feature in self.get_queryset()[:20]:
+            items.append({"id": feature.id, "product_id": feature.product_id, "product_title": feature.product.title, "artist_approved": feature.artist_approved, "admin_approved": feature.admin_approved, "starts_at": feature.starts_at, "expires_at": feature.expires_at})
+        return Response(items)
+
+
+class CreateSpotlightRequestView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        product = get_object_or_404(Product, pk=request.data.get("product_id"), artist__user=request.user)
+        if product.status != Product.STATUS_APPROVED or not product.is_public_visible:
+            return Response({"detail": "Only approved public artworks can request Spotlight."}, status=400)
+        feature, created = SpotlightFeature.objects.get_or_create(product=product)
+        if feature.admin_approved and feature.expires_at and feature.expires_at > timezone.now():
+            return Response({"detail": "This artwork is already in Spotlight."}, status=400)
+        feature.artist_approved = False
+        feature.admin_approved = False
+        feature.starts_at = None
+        feature.expires_at = None
+        feature.save(update_fields=["artist_approved", "admin_approved", "starts_at", "expires_at"])
+        return Response({"id": feature.id, "product_id": product.id, "product_title": product.title, "artist_approved": False, "admin_approved": False}, status=201 if created else 200)
+
+
+class ArtistSpotlightApprovalView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        feature = get_object_or_404(SpotlightFeature.objects.select_related("product__artist"), pk=pk, product__artist__user=request.user)
+        feature.artist_approved = True
+        feature.artist_approved_at = timezone.now()
+        feature.save(update_fields=["artist_approved", "artist_approved_at"])
+        return Response({"approved": True, "detail": "Waiting for admin approval."})
+
+
+class AdminSpotlightFeaturesView(generics.ListAPIView):
+    permission_classes = [IsSuperAdmin]
+
+    def get_queryset(self):
+        return SpotlightFeature.objects.filter(artist_approved=True).select_related("product", "product__artist")
+
+    def list(self, request, *args, **kwargs):
+        return Response([{ "id": f.id, "product_id": f.product_id, "product_title": f.product.title, "artist_name": f.product.artist.brand_name, "artist_approved": f.artist_approved, "admin_approved": f.admin_approved } for f in self.get_queryset()[:50]])
+
+
+class AdminSpotlightApprovalView(drf_views.APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def post(self, request, pk):
+        feature = get_object_or_404(SpotlightFeature, pk=pk, artist_approved=True)
+        now = timezone.now()
+        feature.admin_approved = True
+        feature.admin_approved_at = now
+        feature.starts_at = now
+        feature.expires_at = now + timedelta(hours=24)
+        feature.save(update_fields=["admin_approved", "admin_approved_at", "starts_at", "expires_at"])
+        create_notification(
+            feature.product.artist.user,
+            "Spotlight approved",
+            f"Your artwork {feature.product.title} is now featured in the FNAAD Spotlight for 24 hours.",
+            "spotlight_approved",
+            {"product_id": feature.product_id, "expires_at": feature.expires_at.isoformat()},
+        )
+        return Response({"approved": True, "starts_at": feature.starts_at, "expires_at": feature.expires_at})
+
 
 class ProductReviewsListView(generics.ListAPIView):
     """
@@ -1377,6 +1694,25 @@ class ArtistProfileDetailView(generics.RetrieveAPIView):
         return ArtistProfile.objects.all()
 
 
+class ArtistFollowToggleView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        artist = get_object_or_404(ArtistProfile, pk=pk)
+        follow, created = ArtistFollow.objects.get_or_create(artist=artist, user=request.user)
+        if not created:
+            follow.delete()
+            following = False
+        else:
+            following = True
+            create_notification(artist.user, "New follower", f"{request.user.username} started following your artist profile.", "artist_follow", {"artist_id": artist.id})
+        return Response({"following": following, "follower_count": artist.followers.count()})
+
+    def get(self, request, pk):
+        artist = get_object_or_404(ArtistProfile, pk=pk)
+        return Response({"following": ArtistFollow.objects.filter(artist=artist, user=request.user).exists(), "follower_count": artist.followers.count()})
+
+
 class AdminArtistListView(generics.ListAPIView):
     """
     Staff-only list of all artists with full personal info.
@@ -1500,6 +1836,7 @@ class AdminDashboardStatsView(drf_views.APIView):
                 "pending": pending_products,
                 "approved": approved_products,
                 "rejected": rejected_products,
+                "copy_reports": Product.objects.filter(flagged_as_copy=True).count(),
             },
             "users": {
                 "total_artists": total_artists,

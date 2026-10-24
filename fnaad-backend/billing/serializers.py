@@ -32,7 +32,6 @@ class SubscriptionPlanSerializer(serializers.Serializer):
 
 class StartSubscriptionPaymentSerializer(serializers.Serializer):
     plan_id = serializers.IntegerField(default=1, min_value=1)
-    amount_xaf = serializers.IntegerField(required=False, min_value=1, max_value=22)
     phone_number = serializers.CharField(max_length=20, required=False, allow_blank=False)
     method = serializers.ChoiceField(choices=["orange", "mtn"], required=False)
 
@@ -47,7 +46,7 @@ class SubscriptionPaymentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SubscriptionPayment
-        fields = ["id", "external_reference", "campay_reference", "amount_xaf", "duration_months", "status", "created_at"]
+        fields = ["id", "external_reference", "provider_transaction_id", "amount_xaf", "duration_months", "status", "created_at"]
         read_only_fields = fields
 
 

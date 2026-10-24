@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import ArtistProfile, User
 from .models import Subscription, SubscriptionPayment
-from .views import apply_successful_payment
+from .views import apply_payment_status
 
 
 class SuccessfulSubscriptionPaymentTests(TestCase):
@@ -40,7 +40,7 @@ class SuccessfulSubscriptionPaymentTests(TestCase):
             duration_months=1,
         )
 
-        apply_successful_payment(payment, {"status": "SUCCESSFUL", "reference": "campay-early-renewal"})
+        apply_payment_status(payment, {"status": "SUCCESSFUL", "transId": "fapshi-early-renewal"})
 
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.status, Subscription.STATUS_ACTIVE)
@@ -54,7 +54,7 @@ class SuccessfulSubscriptionPaymentTests(TestCase):
             amount_xaf=2500,
             duration_months=1,
         )
-        payload = {"status": "SUCCESSFUL", "reference": "campay-idempotent-renewal"}
+        payload = {"status": "SUCCESSFUL", "transId": "fapshi-idempotent-renewal"}
 
         apply_successful_payment(payment, payload)
         self.subscription.refresh_from_db()
@@ -65,7 +65,7 @@ class SuccessfulSubscriptionPaymentTests(TestCase):
         self.assertEqual(self.subscription.current_period_end, first_end_date)
 
 
-class CustomSubscriptionAmountTests(TestCase):
+class FapshiSubscriptionPaymentTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="artist-custom-amount",
@@ -82,42 +82,36 @@ class CustomSubscriptionAmountTests(TestCase):
         )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
-        self.url = "/api/billing/campay/start/"
+        self.url = "/api/billing/fapshi/start/"
 
-    @override_settings(CAMPAY_BASE_URL="https://demo.campay.net/api")
-    def test_demo_custom_amount_is_sent_to_campay(self):
-        token_response = Mock()
-        token_response.json.return_value = {"token": "test-token"}
-        collect_response = Mock()
-        collect_response.json.return_value = {"reference": "demo-reference"}
+    @override_settings(
+        SUBSCRIPTION_PLANS=[{"id": 2, "duration_months": 2, "price_xaf": 250}],
+        FAPSHI_BASE_URL="https://sandbox.fapshi.com",
+        FAPSHI_APIUSER="test-user",
+        FAPSHI_APIKEY="test-key",
+    )
+    def test_direct_pay_request_uses_fapshi_credentials_and_transaction_id(self):
+        response_mock = Mock()
+        response_mock.json.return_value = {"transId": "fapshi-demo-reference"}
 
-        with patch("billing.views.requests.post", side_effect=[token_response, collect_response]) as post:
+        with patch("billing.views.requests.post", return_value=response_mock) as post:
             response = self.client.post(
                 self.url,
-                {"plan_id": 2, "amount_xaf": 18, "phone_number": "690000001", "method": "orange"},
+                {"plan_id": 2, "phone_number": "690000001", "method": "orange"},
                 format="json",
             )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["amount_xaf"], 18)
-        self.assertEqual(post.call_args_list[1].kwargs["json"]["amount"], "18")
+        self.assertEqual(response.data["amount_xaf"], 250)
+        self.assertEqual(response.data["provider_transaction_id"], "fapshi-demo-reference")
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], 250)
+        self.assertEqual(post.call_args.kwargs["json"]["medium"], "orange money")
 
-    @override_settings(CAMPAY_BASE_URL="https://api.campay.net/api")
-    def test_custom_amount_is_rejected_outside_demo(self):
+    @override_settings(SUBSCRIPTION_PLANS=[{"id": 2, "duration_months": 2, "price_xaf": 99}])
+    def test_plan_below_fapshi_minimum_is_rejected(self):
         response = self.client.post(
             self.url,
-            {"plan_id": 2, "amount_xaf": 18, "phone_number": "690000001", "method": "orange"},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(SubscriptionPayment.objects.exists())
-
-    @override_settings(CAMPAY_BASE_URL="https://demo.campay.net/api")
-    def test_demo_custom_amount_cannot_exceed_22(self):
-        response = self.client.post(
-            self.url,
-            {"plan_id": 2, "amount_xaf": 23, "phone_number": "690000001", "method": "orange"},
+            {"plan_id": 2, "phone_number": "690000001", "method": "orange"},
             format="json",
         )
 

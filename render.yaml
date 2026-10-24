@@ -1,115 +1,69 @@
 version: 1
 
+databases:
+  - name: fnaad-db
+    plan: free
+    postgresVersion: 16
+    region: frankfurt
+
 services:
   - type: web
     name: fnaad-api
-    env: python
-    plan: starter
-    repo:
-      path: fnaad-backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-    region: oregon
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: fnaad-backend
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          databaseName: fnaad-db
+          name: fnaad-db
+          property: connectionString
       - key: DEBUG
-        value: false
+        value: "false"
       - key: SECRET_KEY
-        generate: true
+        generateValue: true
       - key: ALLOWED_HOSTS
         value: "*"
       - key: CORS_ALLOW_ALL_ORIGINS
-        value: true
+        value: "true"
+      - key: SERVE_MEDIA
+        value: "true"
       - key: SITE_BASE_URL
-        value: https://fnaad-marketplace-api.onrender.com
-      - key: DB_ENGINE
-        value: django.db.backends.postgresql
-      - key: DB_NAME
-        value: fnaad
-      - key: DB_USER
-        value: fnaad
-      - key: DB_HOST
-        value: fnaad-db
-      - key: DB_PORT
-        value: 5432
-      - key: DB_CONN_MAX_AGE
-        value: 60
+        value: https://fnaad-api.onrender.com
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
-        value: 587
+        value: "587"
       - key: EMAIL_USE_TLS
-        value: true
+        value: "true"
       - key: DEFAULT_FROM_EMAIL
         value: FNAAD Marketplace <fedounabdelaziz@gmail.com>
-      - key: CAMPAY_BASE_URL
-        value: https://demo.campay.net/api
-      - key: SUBSCRIPTION_PRICE_1_MONTH
-        value: 7
-      - key: SUBSCRIPTION_PRICE_2_MONTHS
-        value: 11
-      - key: SUBSCRIPTION_PRICE_3_MONTHS
-        value: 22
-      - key: CAMPAY_USERNAME
-        # Set this in Render dashboard
-      - key: CAMPAY_PASSWORD
-        # Set this in Render dashboard
-      - key: CAMPAY_WEBHOOK_KEY
-        # Set this in Render dashboard
       - key: EMAIL_HOST_USER
-        # Set this in Render dashboard
+        sync: false
       - key: EMAIL_HOST_PASSWORD
-        # Set this in Render dashboard
-      - key: ANTHROPIC_API_KEY
-        # Optional
+        sync: false
       - key: GEMINI_API_KEY
-        # Optional
-
-  - type: web
-    name: fnaad-admin
-    env: node
-    plan: starter
-    repo:
-      path: fnaad-admin
-    buildCommand: npm install && npm run build
-    buildFilter:
-      paths:
-        - fnaad-admin/**
-    preBuildCommand: npm ci
-    region: oregon
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://fnaad-marketplace-api.onrender.com/api
+        sync: false
+      - key: FAPSHI_BASE_URL
+        value: https://sandbox.fapshi.com
+      - key: FAPSHI_APIUSER
+        sync: false
+      - key: FAPSHI_APIKEY
+        sync: false
 
   - type: static
-    name: fnaad-frontend
-    repo:
-      path: fnaad-frontend
-    buildCommand: npm install && npx expo export --platform web
+    name: fnaad-admin
+    region: frankfurt
+    rootDir: fnaad-admin
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
-    buildFilter:
-      paths:
-        - fnaad-frontend/**
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      - key: EXPO_PUBLIC_API_BASE_URL
-        value: https://fnaad-marketplace-api.onrender.com/api
-      - key: EXPO_PUBLIC_API_ORIGIN
-        value: https://fnaad-marketplace-api.onrender.com
-      - key: EXPO_PUBLIC_FNAAD_SUBSCRIPTION_WHATSAPP
-        value: "237688254466"
-      - key: EXPO_PUBLIC_FNAAD_SUBSCRIPTION_MOMO_PROVIDER
-        value: "Orange Money"
+      - key: VITE_API_BASE_URL
+        value: https://fnaad-api.onrender.com/api
 
-databases:
-  - name: fnaad-db
-    plan: starter
-    postgresVersion: 16
-    region: oregon
-    ipAllowList:
-      - 0.0.0.0/0

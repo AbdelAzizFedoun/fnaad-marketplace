@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Animated, Platform, useWindowDimensions } from "react-native";
-import { startSubscriptionPayment, getSubscriptionPaymentStatus, confirmSubscriptionPayment, getSubscriptionPlans } from "../services/api";
+import { startSubscriptionPayment, getSubscriptionPaymentStatus, getSubscriptionPlans } from "../services/api";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import React from "react";
@@ -17,9 +17,9 @@ type PaymentMethod = "orange" | "mtn";
 type Step = "plan" | "method" | "pending";
 
 const PLANS: Plan[] = [
-  { id: 1, duration_months: 1, price_xaf: 7 },
-  { id: 2, duration_months: 2, price_xaf: 11 },
-  { id: 3, duration_months: 3, price_xaf: 22 },
+  { id: 1, duration_months: 1, price_xaf: 2000 },
+  { id: 2, duration_months: 2, price_xaf: 4000 },
+  { id: 3, duration_months: 3, price_xaf: 6500 },
 ];
 
 export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () => void }) {
@@ -33,27 +33,16 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
   const [selectedPlan, setSelectedPlan] = useState<Plan>(PLANS[1]);
   const [plans, setPlans] = useState<Plan[]>(PLANS);
   const [plansLoading, setPlansLoading] = useState(true);
-  const [demoMode, setDemoMode] = useState(false);
-  const [customAmount, setCustomAmount] = useState(String(PLANS[1].price_xaf));
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [externalReference, setExternalReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pollCount, setPollCount] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pollingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoConfirmed = useRef(false);
-  const demoModeRef = useRef(false);
-
-  // How many CamPay polls before we auto-finalize. The CamPay demo sandbox
-  // keeps the transaction "PENDING" after the customer pays on their phone,
-  // so we re-verify with CamPay and then trust the on-phone confirmation.
-  const AUTO_CONFIRM_POLLS = 8;
 
   useEffect(() => {
     getSubscriptionPlans()
@@ -63,9 +52,7 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
           setPlans(loadedPlans);
           const chosen = loadedPlans.find((plan) => plan.id === selectedPlan.id) || loadedPlans[Math.min(1, loadedPlans.length - 1)];
           setSelectedPlan(chosen);
-          setCustomAmount(String(chosen.price_xaf));
         }
-        setDemoMode(Boolean(res.data?.demo_mode));
       })
       .catch((err) => console.log("Subscription plans load error:", err.message))
       .finally(() => setPlansLoading(false));
@@ -100,7 +87,6 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
 
   const handleChoosePlan = (plan: Plan) => {
     setSelectedPlan(plan);
-    setCustomAmount(String(plan.price_xaf));
     animateTransition(() => setStep("method"));
   };
 
@@ -122,9 +108,8 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
       setError(t("subscriptionInvalidPhoneError"));
       return;
     }
-    const amountXaf = Number(customAmount);
-    if (demoMode && (!Number.isInteger(amountXaf) || amountXaf < 1 || amountXaf > 22)) {
-      setError("Enter a test amount from 1 to 22 XAF.");
+    if (selectedPlan.price_xaf < 100) {
+      setError("Fapshi requires at least 100 XAF. Update the subscription prices in the backend settings.");
       return;
     }
     setLoading(true);
@@ -134,12 +119,9 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
         selectedPlan.id,
         phoneNumber,
         selectedMethod,
-        demoMode ? amountXaf : undefined,
       );
       const extRef = res.data.external_reference as string;
       setExternalReference(extRef);
-      demoModeRef.current = Boolean(res.data.demo_mode);
-
       animateTransition(() => setStep("pending"));
       pollPaymentStatus(extRef);
     } catch (err: any) {
@@ -168,48 +150,17 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
           onSuccess?.();
           return;
         }
-        if (status === "FAILED") {
+        if (status === "FAILED" || status === "EXPIRED") {
           stopPolling();
           setError(t("subscriptionPaymentFailed"));
           animateTransition(() => setStep("method"));
           return;
         }
 
-        setPollCount(attempts);
-
-        // CamPay confirmed the collection via its API: finalize immediately.
-        // Otherwise, once we've given the sandbox enough time to reflect the
-        // on-phone payment, auto-finalize so the user isn't stuck on "Pending".
-        // Auto-finalize is limited to the demo sandbox to avoid granting
-        // subscriptions for unpaid transactions in production.
-        if (!autoConfirmed.current && demoModeRef.current && attempts >= AUTO_CONFIRM_POLLS) {
-          autoConfirmed.current = true;
-          handleConfirmPayment();
-        }
       } catch (err) {
         console.log("Payment status poll error:", err);
       }
-    }, 4000);
-  };
-
-  const handleConfirmPayment = async () => {
-    if (!externalReference) return;
-    autoConfirmed.current = true;
-    stopPolling();
-    setConfirming(true);
-    setError(null);
-    try {
-      const res = await confirmSubscriptionPayment(externalReference);
-      if (res.data.status === "SUCCESSFUL") {
-        onSuccess?.();
-      } else {
-        setError(t("subscriptionPaymentFailed"));
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || t("subscriptionPaymentError"));
-    } finally {
-      setConfirming(false);
-    }
+    }, 12000);
   };
 
   const formatPrice = (price: number) => price.toLocaleString();
@@ -229,7 +180,7 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
           <View>
             <Text style={styles.title}>{t("subscriptionChoosePlan")}</Text>
             <Text style={styles.subtitle}>
-              {demoMode ? "" : "Choose your plan duration."}
+              Choose your plan duration.
             </Text>
             <View style={styles.plansColumn}>
               {plansLoading ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 22 }} /> : plans.map((plan) => {
@@ -317,24 +268,6 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
 
             {selectedMethod && (
               <View style={styles.formSection}>
-                {demoMode && (
-                  <>
-                    <Text style={styles.inputLabel}>Test amount (1-22 XAF)</Text>
-                    <View style={[styles.amountInputRow, error && styles.phoneInputRowError]}>
-                      <TextInput
-                        style={styles.phoneInput}
-                        value={customAmount}
-                        onChangeText={(value) => setCustomAmount(value.replace(/\D/g, "").slice(0, 2))}
-                        keyboardType="number-pad"
-                        placeholder="22"
-                        placeholderTextColor={colors.textMuted}
-                        maxLength={2}
-                        accessibilityLabel="CamPay demo test amount in XAF"
-                      />
-                      <Text style={styles.amountCurrency}>XAF</Text>
-                    </View>
-                  </>
-                )}
                 <Text style={styles.inputLabel}>{t("subscriptionPhoneNumber")}</Text>
                 <View style={[styles.phoneInputRow, error && styles.phoneInputRowError]}>
                   <View style={styles.phonePrefixContainer}>
@@ -385,7 +318,7 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
             </Animated.View>
             <Text style={styles.pendingTitle}>{t("subscriptionConfirmOnPhone")}</Text>
             <Text style={styles.pendingMessage}>
-              {selectedMethod === "orange" ? "#150*50#" : "*126#"} · {t("subscriptionWaitingConfirmation")}
+              {t("subscriptionWaitingConfirmation")}
             </Text>
             <View style={styles.pendingSteps}>
               <View style={styles.pendingStep}>
@@ -404,27 +337,6 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
               </View>
             </View>
 
-            {demoModeRef.current && (
-              <>
-                <TouchableOpacity
-                  style={[styles.confirmButton, confirming && styles.submitButtonDisabled]}
-                  onPress={handleConfirmPayment}
-                  disabled={confirming}
-                  activeOpacity={0.85}
-                >
-                  {confirming ? (
-                    <ActivityIndicator color={colors.background} />
-                  ) : (
-                    <Text style={styles.confirmButtonText}>
-                      {t("subscriptionConfirmPaid") || "I've paid on my phone"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.confirmHint}>
-                  {t("subscriptionConfirmHint") || "If you completed the USSD prompt but it's not reflecting yet, tap here to confirm."}
-                </Text>
-              </>
-            )}
           </View>
         )}
       </Animated.View>

@@ -177,6 +177,9 @@ export default function AdminDashboardScreen() {
             <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin-approve")}>
               <Text style={styles.moderationBtnText}>{t("goToModeration")}</Text>
             </Pressable>
+            <Pressable style={styles.moderationBtn} onPress={() => router.push("/admin-spotlight")}>
+              <Text style={styles.moderationBtnText}>{t("spotlightApproval")}</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>

@@ -1,7 +1,7 @@
 import requests
 from .models import Notification
 
-EXPO_PUSH_URL = "http://exp.host/--/api/v2/push/send"
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 
 def send_push_notification(token, title, body, data=None):

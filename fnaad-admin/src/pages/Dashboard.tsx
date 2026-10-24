@@ -28,6 +28,7 @@ type DashboardStats = {
     pending: number;
     approved: number;
     rejected: number;
+    copy_reports: number;
   };
   users: {
     total_artists: number;
@@ -247,6 +248,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard label="Total artworks" value={stats.products.total} accent />
         <StatCard label="Pending" value={stats.products.pending} />
+        <StatCard label="Copy reports" value={stats.products.copy_reports} />
         <StatCard label="Artists" value={stats.users.total_artists} />
         <StatCard label="Customers" value={stats.users.total_customers} />
       </div>

@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.utils import timezone
+from datetime import timedelta
 from .models import User, ArtistProfile, PasswordResetCode, Notification
 
 
@@ -59,7 +61,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             user.is_artist = True
             user.save()
 
-            ArtistProfile.objects.get_or_create(
+            artist_profile, _ = ArtistProfile.objects.get_or_create(
                 user=user,
                 defaults={
                     "brand_name": user.username,
@@ -70,6 +72,13 @@ class RegisterSerializer(serializers.ModelSerializer):
                     "national_id_number": national_id_number,
                 },
             )
+            # Start free trial for new artist (30 days)
+            now = timezone.now()
+            if not artist_profile.free_trial_started_at:
+                artist_profile.free_trial_started_at = now
+                artist_profile.free_trial_ends_at = now + timedelta(days=30)
+                artist_profile.free_trial_expired_notified_3days = False
+                artist_profile.save(update_fields=["free_trial_started_at", "free_trial_ends_at", "free_trial_expired_notified_3days"])
         return user
 
 
@@ -140,7 +149,7 @@ class RequestPasswordResetSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         if not User.objects.filter(email=value).exists():
-            # Don't reveal whether the email exists — respond the same either way
+            # Don't reveal whether the email exists   respond the same either way
             pass
         return value
 

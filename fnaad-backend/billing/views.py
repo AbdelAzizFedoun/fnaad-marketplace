@@ -1,15 +1,9 @@
-import hashlib
-import hmac
 import re
 import uuid
-from urllib.parse import urlparse
 
 import requests
 from django.conf import settings
-from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from django.utils import timezone
@@ -27,23 +21,13 @@ def get_subscription_plan(plan_id: int):
     return None
 
 
-def is_campay_demo():
-    return urlparse(settings.CAMPAY_BASE_URL).hostname == "demo.campay.net"
+REGISTRATION_FEE_XAF = 500
 
 
-def campay_token():
-    if not settings.CAMPAY_USERNAME or not settings.CAMPAY_PASSWORD:
-        raise RuntimeError("CamPay is not configured. Set CAMPAY_USERNAME and CAMPAY_PASSWORD on the backend.")
-    response = requests.post(
-        f"{settings.CAMPAY_BASE_URL}/token/",
-        json={"username": settings.CAMPAY_USERNAME, "password": settings.CAMPAY_PASSWORD},
-        timeout=20,
-    )
-    response.raise_for_status()
-    token = response.json().get("token")
-    if not token:
-        raise RuntimeError("CamPay did not return an access token.")
-    return token
+def fapshi_headers():
+    if not settings.FAPSHI_APIUSER or not settings.FAPSHI_APIKEY:
+        raise RuntimeError("Fapshi is not configured. Set FAPSHI_APIUSER and FAPSHI_APIKEY on the backend.")
+    return {"apiuser": settings.FAPSHI_APIUSER, "apikey": settings.FAPSHI_APIKEY}
 
 
 def normalize_cameroon_phone(value):
@@ -57,24 +41,32 @@ def normalize_cameroon_phone(value):
     return digits
 
 
-def apply_successful_payment(payment, payload):
-    """Idempotently grant subscription months after CamPay confirms collection."""
+def apply_payment_status(payment, payload):
+    """Store Fapshi status and grant subscription time only after verified success."""
     provider_status = str(payload.get("status", "")).upper()
     was_successful = payment.status in {"SUCCESSFUL", "SUCCESS", "COMPLETED"}
-    payment.status = provider_status or payment.status
+    if provider_status in {"CREATED", "PENDING", "SUCCESSFUL", "FAILED", "EXPIRED"}:
+        payment.status = provider_status
     payment.provider_payload = payload
-    if payload.get("reference"):
-        payment.campay_reference = str(payload["reference"])
-    payment.save(update_fields=["status", "provider_payload", "campay_reference", "updated_at"])
-    if provider_status in {"SUCCESSFUL", "SUCCESS", "COMPLETED"} and not was_successful:
+    if payload.get("transId"):
+        payment.provider_transaction_id = str(payload["transId"])
+    payment.save(update_fields=["status", "provider_payload", "provider_transaction_id", "updated_at"])
+    if provider_status == "SUCCESSFUL" and not was_successful:
         subscription = payment.subscription
         now = timezone.now()
+        if payment.is_registration_fee:
+            subscription.status = Subscription.STATUS_TRIAL
+            subscription.registration_fee_paid = True
+            subscription.trial_start_date = now
+            subscription.trial_end_date = now + timedelta(days=30)
+            subscription.save(update_fields=["status", "registration_fee_paid", "trial_start_date", "trial_end_date"])
+            return
         # An early renewal must not discard the artist's remaining access.
         # Start the new plan at the later of the current expiry or payment time.
         renewal_start = max(now, subscription.current_period_end) if subscription.current_period_end else now
         subscription.status = Subscription.STATUS_ACTIVE
         subscription.current_period_end = renewal_start + timedelta(days=30 * payment.duration_months)
-        subscription.last_payment_id = payment.campay_reference or payment.external_reference
+        subscription.last_payment_id = payment.provider_transaction_id or payment.external_reference
         subscription.save(update_fields=["status", "current_period_end", "last_payment_id"])
 
 
@@ -91,61 +83,100 @@ class StartSubscriptionPaymentView(generics.GenericAPIView):
         validated_data = serializer.validated_data
         plan_id = validated_data.get("plan_id", 1)
         plan = get_subscription_plan(plan_id)
-        requested_amount = validated_data.get("amount_xaf")
-        if requested_amount is not None and not is_campay_demo():
+        amount_xaf = plan["price_xaf"]
+        if amount_xaf < 100:
             return Response(
-                {"amount_xaf": ["Custom amounts are only available during CamPay demo testing."]},
+                {"amount_xaf": ["Fapshi requires a minimum payment of 100 XAF. Update the subscription prices in the backend environment."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        amount_xaf = requested_amount if requested_amount is not None else plan["price_xaf"]
         method = validated_data.get("method")
-        operator = {"orange": "ORANGE", "mtn": "MTN"}.get(method) if method else None
         try:
             phone = normalize_cameroon_phone(validated_data.get("phone_number") or artist.mobile_money_number)
         except ValueError as exc:
             return Response({"phone_number": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
         subscription, _ = Subscription.objects.get_or_create(
-            artist=artist, defaults={"trial_end_date": timezone.now() + timedelta(days=30)}
+            artist=artist, defaults={"trial_end_date": timezone.now(), "registration_fee_paid": False}
         )
+        if not subscription.registration_fee_paid:
+            return Response({"detail": "Pay the 500 XAF registration fee before subscribing."}, status=400)
         external_reference = f"fnaad-sub-{subscription.pk}-{uuid.uuid4().hex[:16]}"
         payment = SubscriptionPayment.objects.create(
             subscription=subscription, external_reference=external_reference,
             phone_number=phone, amount_xaf=amount_xaf, duration_months=plan["duration_months"],
         )
         try:
-            token = campay_token()
             collect_body = {
-                "amount": str(int(payment.amount_xaf)),
-                "currency": "XAF",
-                "from": phone,
-                "description": "FNAAD artist subscription",
-                "external_reference": external_reference,
+                "amount": int(payment.amount_xaf),
+                "phone": phone[-9:],
+                "externalId": external_reference,
+                "userId": str(request.user.pk),
+                "message": "FNAAD artist subscription",
             }
-            if operator:
-                collect_body["operator"] = operator
+            if method == "orange":
+                collect_body["medium"] = "orange money"
             response = requests.post(
-                f"{settings.CAMPAY_BASE_URL}/collect/",
-                headers={"Authorization": f"Token {token}"},
+                f"{settings.FAPSHI_BASE_URL.rstrip('/')}/direct-pay",
+                headers=fapshi_headers(),
                 json=collect_body,
                 timeout=20,
             )
             response.raise_for_status()
             payload = response.json()
-            payment.campay_reference = payload.get("reference")
+            if not payload.get("transId"):
+                raise ValueError("Fapshi did not return a transaction ID.")
+            payment.provider_transaction_id = str(payload["transId"])
             payment.provider_payload = payload
-            payment.save(update_fields=["campay_reference", "provider_payload", "updated_at"])
+            payment.save(update_fields=["provider_transaction_id", "provider_payload", "updated_at"])
         except (requests.RequestException, RuntimeError, ValueError) as exc:
             payment.status = "FAILED"
             payment.save(update_fields=["status", "updated_at"])
             return Response({"detail": "Could not start the Mobile Money request. Please try again.", "error": str(exc)}, status=502)
         data = SubscriptionPaymentSerializer(payment).data
-        # Surface whether we're on the CamPay demo sandbox so the client can
-        # auto-finalize once the customer confirms on their phone (the demo
-        # keeps the transaction PENDING on the API). In production this stays
-        # False and confirmation relies on CamPay's webhook / status polling.
-        data["demo_mode"] = is_campay_demo()
+        data["demo_mode"] = False
         return Response(data, status=status.HTTP_201_CREATED)
+
+
+class StartRegistrationFeePaymentView(StartSubscriptionPaymentView):
+    """Start the separate, non-refundable 500 XAF artist registration fee."""
+
+    def post(self, request):
+        artist = get_artist_profile_for_user(request.user)
+        if artist is None:
+            return Response({"detail": "Artist profile required."}, status=403)
+        try:
+            phone = normalize_cameroon_phone(request.data.get("phone_number") or artist.mobile_money_number)
+        except ValueError as exc:
+            return Response({"phone_number": [str(exc)]}, status=400)
+        subscription, _ = Subscription.objects.get_or_create(
+            artist=artist, defaults={"trial_end_date": timezone.now(), "registration_fee_paid": False}
+        )
+        if subscription.registration_fee_paid:
+            return Response({"detail": "Registration fee already paid."}, status=400)
+        external_reference = f"fnaad-reg-{subscription.pk}-{uuid.uuid4().hex[:16]}"
+        payment = SubscriptionPayment.objects.create(
+            subscription=subscription, external_reference=external_reference,
+            phone_number=phone, amount_xaf=REGISTRATION_FEE_XAF, duration_months=0,
+            is_registration_fee=True,
+        )
+        try:
+            body = {"amount": REGISTRATION_FEE_XAF, "phone": phone[-9:], "externalId": external_reference, "userId": str(request.user.pk), "message": "FNAAD artist registration fee"}
+            if request.data.get("method") in {"orange", "mtn"}:
+                body["medium"] = "orange money" if request.data["method"] == "orange" else "mtn mobile money"
+            response = requests.post(f"{settings.FAPSHI_BASE_URL.rstrip('/')}/direct-pay", headers=fapshi_headers(), json=body, timeout=20)
+            response.raise_for_status()
+            payload = response.json()
+            if not payload.get("transId"): raise ValueError("Fapshi did not return a transaction ID.")
+            payment.provider_transaction_id = str(payload["transId"])
+            payment.provider_payload = payload
+            payment.save(update_fields=["provider_transaction_id", "provider_payload", "updated_at"])
+        except (requests.RequestException, RuntimeError, ValueError) as exc:
+            payment.status = "FAILED"
+            payment.save(update_fields=["status", "updated_at"])
+            return Response({"detail": "Could not start the registration payment.", "error": str(exc)}, status=502)
+        data = SubscriptionPaymentSerializer(payment).data
+        data["registration_fee_xaf"] = REGISTRATION_FEE_XAF
+        return Response(data, status=201)
 
 
 class SubscriptionPaymentStatusView(generics.RetrieveAPIView):
@@ -153,8 +184,7 @@ class SubscriptionPaymentStatusView(generics.RetrieveAPIView):
     serializer_class = SubscriptionPaymentSerializer
 
     def get_object(self):
-        # An unknown or already-settled reference must be a 404, not a 500:
-        # the app polls this endpoint while a CamPay payment is in flight.
+        # An unknown or already-settled reference must be a 404, not a 500.
         payment = get_object_or_404(
             SubscriptionPayment.objects.select_related("subscription__artist__user"),
             external_reference=self.kwargs["external_reference"],
@@ -162,24 +192,22 @@ class SubscriptionPaymentStatusView(generics.RetrieveAPIView):
         if payment.subscription.artist.user_id != self.request.user.id:
             from django.http import Http404
             raise Http404
-        if payment.campay_reference and payment.status == "PENDING":
+        if payment.provider_transaction_id and payment.status not in {"SUCCESSFUL", "FAILED", "EXPIRED"}:
             try:
-                token = campay_token()
-                result = requests.get(f"{settings.CAMPAY_BASE_URL}/transaction/{payment.campay_reference}/", headers={"Authorization": f"Token {token}"}, timeout=20)
+                result = requests.get(
+                    f"{settings.FAPSHI_BASE_URL.rstrip('/')}/payment-status/{payment.provider_transaction_id}",
+                    headers=fapshi_headers(),
+                    timeout=20,
+                )
                 result.raise_for_status()
-                apply_successful_payment(payment, result.json())
+                apply_payment_status(payment, result.json())
             except (requests.RequestException, RuntimeError, ValueError):
-                pass  # Webhook remains the primary production confirmation channel.
+                pass
         return payment
 
 
 class SubscriptionPaymentConfirmView(generics.GenericAPIView):
-    """
-    Re-check CamPay for a completed collection, and (only if CamPay has not
-    yet reflected success, e.g. the demo sandbox keeps the transaction
-    PENDING after the customer confirms on their phone) trust the artist's
-    confirmation that the USSD prompt was paid.
-    """
+    """Re-check Fapshi; never treat a client confirmation as proof of payment."""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SubscriptionPaymentSerializer
 
@@ -195,28 +223,17 @@ class SubscriptionPaymentConfirmView(generics.GenericAPIView):
             from django.http import Http404
             raise Http404
 
-        # 1) Try real CamPay verification first.
-        if payment.campay_reference and payment.status == "PENDING":
+        if payment.provider_transaction_id and payment.status not in {"SUCCESSFUL", "FAILED", "EXPIRED"}:
             try:
-                token = campay_token()
                 result = requests.get(
-                    f"{settings.CAMPAY_BASE_URL}/transaction/{payment.campay_reference}/",
-                    headers={"Authorization": f"Token {token}"},
+                    f"{settings.FAPSHI_BASE_URL.rstrip('/')}/payment-status/{payment.provider_transaction_id}",
+                    headers=fapshi_headers(),
                     timeout=20,
                 )
                 result.raise_for_status()
-                apply_successful_payment(payment, result.json())
+                apply_payment_status(payment, result.json())
             except (requests.RequestException, RuntimeError, ValueError):
                 pass
-
-        # 2) Fallback: the artist confirmed the phone prompt but CamPay still
-        #    shows PENDING (common in the demo sandbox), so grant the subscription.
-        if payment.status == "PENDING" and is_campay_demo():
-            apply_successful_payment(
-                payment,
-                {"status": "SUCCESSFUL", "reference": payment.campay_reference or payment.external_reference},
-            )
-
         return Response(SubscriptionPaymentSerializer(payment).data, status=status.HTTP_200_OK)
 
 
@@ -225,28 +242,7 @@ class SubscriptionPlansView(generics.GenericAPIView):
     serializer_class = SubscriptionPlanSerializer
 
     def get(self, request):
-        return Response({"plans": settings.SUBSCRIPTION_PLANS, "demo_mode": is_campay_demo()})
-
-
-@csrf_exempt
-def campay_webhook(request):
-    if request.method != "POST":
-        return HttpResponseBadRequest("POST required")
-    signature = request.headers.get("X-Campay-Signature", "")
-    if not settings.CAMPAY_WEBHOOK_KEY:
-        return JsonResponse({"detail": "CamPay webhook is not configured."}, status=503)
-    expected = hmac.new(settings.CAMPAY_WEBHOOK_KEY.encode(), request.body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(signature, expected):
-        return HttpResponseBadRequest("Invalid signature")
-    try:
-        import json
-        payload = json.loads(request.body)
-        external_reference = payload.get("external_reference")
-        payment = SubscriptionPayment.objects.get(external_reference=external_reference)
-    except (ValueError, SubscriptionPayment.DoesNotExist):
-        return HttpResponseBadRequest("Unknown payment")
-    apply_successful_payment(payment, payload)
-    return JsonResponse({"ok": True})
+        return Response({"plans": settings.SUBSCRIPTION_PLANS, "demo_mode": False})
 
 
 def get_artist_profile_for_user(user):
@@ -298,8 +294,10 @@ class AdminActivateSubscriptionView(generics.UpdateAPIView):
 
         if action == "activate":
             days = int(request.data.get("days", 30))
+            now = timezone.now()
+            renewal_start = max(now, subscription.current_period_end) if subscription.current_period_end else now
             subscription.status = Subscription.STATUS_ACTIVE
-            subscription.current_period_end = timezone.now() + timedelta(days=days)
+            subscription.current_period_end = renewal_start + timedelta(days=days)
             subscription.save()
         elif action == "cancel":
             subscription.status = Subscription.STATUS_CANCELLED

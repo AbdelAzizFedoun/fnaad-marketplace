@@ -20,6 +20,7 @@ const ITEMS: MenuItem[] = [
   { icon: "add-circle-outline", labelKey: "addProduct", route: "/add-product" },
   { icon: "images-outline", labelKey: "myProducts", route: "/my-products" },
   { icon: "bar-chart-outline", labelKey: "myAnalytics", route: "/artist-analytics" },
+  { icon: "star-outline", labelKey: "spotlightApproval", route: "/artist-spotlight" },
   { icon: "clipboard-outline", labelKey: "openRequests", route: "/browse-commissions" },
   { icon: "brush-outline", labelKey: "editProfile", route: "/edit-artist-profile" },
 ];

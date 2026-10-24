@@ -18,7 +18,7 @@ type AppNotification = {
   created_at: string;
 };
 
-type NotificationFilter = "all" | "unread" | "orders" | "commissions" | "social";
+type NotificationFilter = "all" | "unread" | "orders" | "commissions" | "social" | "copyright";
 
 function formatRelativeTime(value: string): string {
   const date = new Date(value);
@@ -54,14 +54,19 @@ export default function NotificationsScreen() {
     delivery: "cube-outline",
     payment: "wallet-outline",
     order: "receipt-outline",
+    copy_review: "warning-outline",
+    copyright_report: "shield-checkmark-outline",
+    copyright_report_admin: "flag-outline",
+    artist_new_product: "color-palette-outline",
   };
 
   const unreadCount = useMemo(() => notifications.filter((notification) => !notification.is_read).length, [notifications]);
 
   const getCategory = (notification: AppNotification): NotificationFilter => {
     if (notification.notification_type === "commission_response") return "commissions";
-    if (["order", "payment", "delivery", "product_status"].includes(notification.notification_type)) return "orders";
+    if (["order", "payment", "delivery", "product_status", "artist_new_product"].includes(notification.notification_type)) return "orders";
     if (["comment", "review", "favorite"].includes(notification.notification_type)) return "social";
+    if (["copy_review", "copyright_report", "copyright_report_admin"].includes(notification.notification_type)) return "copyright";
     return "all";
   };
 
@@ -232,6 +237,7 @@ export default function NotificationsScreen() {
               { key: "orders", label: "Orders" },
               { key: "commissions", label: "Commissions" },
               { key: "social", label: "Social" },
+              { key: "copyright", label: "Copyright" },
             ].map((option) => {
               const selected = filter === option.key;
               return (
@@ -247,17 +253,17 @@ export default function NotificationsScreen() {
           </ScrollView>
 
           <Pressable style={styles.markReadBtn} onPress={markAllAsRead} disabled={unreadCount === 0}>
-            <Text style={[styles.markReadText, { color: unreadCount > 0 ? colors.accent : colors.textMuted }]}>Mark all read</Text>
+            <Text style={[styles.markReadText, { color: unreadCount > 0 ? colors.accent : colors.textMuted }]}>{t("markAllRead")}</Text>
           </Pressable>
 
           {unreadCount > 0 && (
             <View style={[styles.unreadPill, { backgroundColor: colors.accent }]}>
-              <Text style={styles.unreadPillText}>{unreadCount} new</Text>
+              <Text style={styles.unreadPillText}>{unreadCount} {t("newNotifications")}</Text>
             </View>
           )}
 
           <Pressable style={styles.markReadBtn} onPress={clearAll}>
-            <Text style={[styles.markReadText, { color: colors.textMuted }]}>Clear all</Text>
+            <Text style={[styles.markReadText, { color: colors.textMuted }]}>{t("clearAll")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -288,18 +294,25 @@ export default function NotificationsScreen() {
                 ]}
                 onPress={() => openNotification(notification)}
               >
+                {(() => {
+                  const copyrightWarning = notification.notification_type === "copy_review";
+                  const copyrightReport = ["copyright_report", "copyright_report_admin"].includes(notification.notification_type);
+                  const notificationColor = copyrightWarning ? "#D94841" : copyrightReport ? "#C18A24" : colors.accent;
+                  return (
                 <View
                   style={[
                     styles.iconCircle,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    { backgroundColor: colors.surface, borderColor: notificationColor },
                   ]}
                 >
                   <Ionicons
                     name={NOTIFICATION_ICONS[notification.notification_type] || "color-palette-outline"}
                     size={21}
-                    color={colors.accent}
+                    color={notificationColor}
                   />
                 </View>
+                  );
+                })()}
                 <View style={{ flex: 1 }}>
                   <View style={styles.notificationTopRow}>
                     <View style={styles.notificationTitleRow}>

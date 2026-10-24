@@ -26,8 +26,9 @@ class Subscription(models.Model):
     trial_start_date = models.DateTimeField(auto_now_add=True)
     trial_end_date = models.DateTimeField()
     current_period_end = models.DateTimeField(null=True, blank=True)
-    monthly_price_xaf = models.PositiveIntegerField(default=22)
+    monthly_price_xaf = models.PositiveIntegerField(default=2000)
     last_payment_id = models.CharField(max_length=100, blank=True)
+    registration_fee_paid = models.BooleanField(default=True)
 
     @property
     def is_active(self):
@@ -49,13 +50,14 @@ class Subscription(models.Model):
 
 
 class SubscriptionPayment(models.Model):
-    """A CamPay collection request for an artist's subscription."""
+    """A Fapshi collection request for an artist's subscription."""
     subscription = models.ForeignKey(Subscription, on_delete=models.PROTECT, related_name="payments")
     external_reference = models.CharField(max_length=100, unique=True)
-    campay_reference = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    provider_transaction_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     phone_number = models.CharField(max_length=20)
     amount_xaf = models.PositiveIntegerField()
     duration_months = models.PositiveIntegerField(default=1)
+    is_registration_fee = models.BooleanField(default=False)
     status = models.CharField(max_length=30, default="PENDING")
     provider_payload = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

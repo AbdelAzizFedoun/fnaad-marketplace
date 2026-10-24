@@ -15,7 +15,7 @@ Opens at http://localhost:5173.
 ## ⚠️ Before it works — check these against your actual backend
 
 1. **`src/services/api.ts` → `API_BASE_URL`**
-   Currently `http://192.168.1.163:8000/api`. Update if your DRF app doesn't sit at `/api`.
+   For this machine, use `http://10.128.26.133:8000/api`. Update if your DRF app doesn't sit at `/api`.
 
 2. **Login endpoint** (`login()` in `api.ts`)
    Currently posts to `/token/` (simplejwt default). If your `urls.py` uses a different path (e.g. `/auth/login/`), update it there.

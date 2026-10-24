@@ -62,6 +62,24 @@ class Product(models.Model):
     view_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
+    # Subscription visibility
+    is_public_visible = models.BooleanField(default=False)
+    public_visibility_expires_at = models.DateTimeField(null=True, blank=True)
+    published_under_free_trial = models.BooleanField(default=False)
+    # Copy tracking
+    copy_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="derivatives")
+    copy_confidence = models.FloatField(null=True, blank=True)
+    flagged_as_copy = models.BooleanField(default=False)
+    VERIFICATION_DECLARED = "declared"
+    VERIFICATION_EVIDENCE = "evidence"
+    VERIFICATION_VERIFIED = "verified"
+    VERIFICATION_COLLECTOR = "collector"
+    VERIFICATION_CHOICES = [(v, v.title()) for v in (VERIFICATION_DECLARED, VERIFICATION_EVIDENCE, VERIFICATION_VERIFIED, VERIFICATION_COLLECTOR)]
+    CREATION_CHOICES = [(v, v.replace("_", " ").title()) for v in ("original", "commissioned", "licensed", "reproduction", "collaboration", "ai_assisted")]
+    verification_level = models.CharField(max_length=20, choices=VERIFICATION_CHOICES, default=VERIFICATION_DECLARED)
+    creation_method = models.CharField(max_length=20, choices=CREATION_CHOICES, default="original")
+    moods = models.JSONField(default=list, blank=True)
+    passport_token = models.UUIDField(default=uuid.uuid4, unique=False, editable=False, db_index=True)
 
     def __str__(self):
         return f"{self.title} — {self.artist.brand_name}"
@@ -71,7 +89,7 @@ class Product(models.Model):
         from django.conf import settings
         from django.urls import reverse
 
-        base_url = getattr(settings, "SITE_BASE_URL", "https://fnaad-marketplace-api.onrender.com").rstrip("/")
+        base_url = getattr(settings, "SITE_BASE_URL", "https://665d-51-178-86-160.ngrok-free.app").rstrip("/")
         # SITE_BASE_URL may or may not already include /api — reverse() below
         # returns the full path including /api/catalog/..., so strip any
         # trailing /api from base_url to avoid a duplicated /api/api/.
@@ -82,15 +100,73 @@ class Product(models.Model):
         return f"{base_url}{path}"
 
 
+class SpotlightFeature(models.Model):
+    """Approval-controlled 24-hour showcase entry for a delivered artwork."""
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name="spotlight_feature")
+    artist_approved = models.BooleanField(default=False)
+    admin_approved = models.BooleanField(default=False)
+    artist_approved_at = models.DateTimeField(null=True, blank=True)
+    admin_approved_at = models.DateTimeField(null=True, blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ProductModerationEvent(models.Model):
+    """Immutable audit trail for automated and admin moderation decisions."""
+    ACTION_FLAGGED_COPY = "flagged_copy"
+    ACTION_CONFIRMED_COPY = "confirmed_copy"
+    ACTION_OVERRULED_COPY = "overruled_copy"
+    ACTION_APPROVED = "approved"
+    ACTION_REJECTED = "rejected"
+    ACTION_CHOICES = [(value, value.replace("_", " ").title()) for value in (
+        ACTION_FLAGGED_COPY, ACTION_CONFIRMED_COPY, ACTION_OVERRULED_COPY,
+        ACTION_APPROVED, ACTION_REJECTED,
+    )]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="moderation_events")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    reason = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class CreationEvidence(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="creation_evidence")
+    evidence_file = models.FileField(upload_to="products/evidence/")
+    note = models.CharField(max_length=255, blank=True)
+    is_reviewed = models.BooleanField(default=False)
+    approved = models.BooleanField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="products/")
     thumbnail = models.ImageField(upload_to="products/thumbnails/", blank=True)
     is_primary = models.BooleanField(default=False)
     order = models.PositiveSmallIntegerField(default=0)
+    # Image hash fields for duplicate detection
+    image_phash = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    image_dhash = models.CharField(max_length=64, blank=True, null=True)
+    image_file_sha256 = models.CharField(max_length=64, blank=True, null=True, db_index=True)
 
     class Meta:
         ordering = ["order"]
+        indexes = [
+            models.Index(fields=["image_file_sha256"]),
+            models.Index(fields=["image_phash"]),
+        ]
 
     def __str__(self):
         return f"Image #{self.order} — {self.product.title}"
@@ -303,6 +379,7 @@ class SiteSettings(models.Model):
     never query this model any other way.
     """
     require_product_approval = models.BooleanField(default=True)
+    block_near_duplicates = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Site Settings"

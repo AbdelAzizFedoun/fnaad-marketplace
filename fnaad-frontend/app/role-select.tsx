@@ -4,10 +4,12 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useTheme } from "../context/ThemeContext";
 import React from "react";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function RoleSelectScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
 
   const [selected, setSelected] = useState<"artist" | "customer">("artist");
@@ -24,27 +26,27 @@ export default function RoleSelectScreen() {
         style={[styles.card, selected === "artist" && styles.cardActive]}
         onPress={() => setSelected("artist")}
       >
-        <Text style={styles.cardTitle}>I am an artist</Text>
-        <Text style={styles.cardSub}>Sell your artwork and manage your profile.</Text>
+        <Text style={styles.cardTitle}>{t("artistRole")}</Text>
+        <Text style={styles.cardSub}>{t("artistRoleDescription")}</Text>
       </Pressable>
 
       <Pressable
         style={[styles.card, selected === "customer" && styles.cardActive]}
         onPress={() => setSelected("customer")}
       >
-        <Text style={styles.cardTitle}>I am a customer</Text>
-        <Text style={styles.cardSub}>Discover artwork and buy with Mobile Money.</Text>
+        <Text style={styles.cardTitle}>{t("customerRole")}</Text>
+        <Text style={styles.cardSub}>{t("customerRoleDescription")}</Text>
       </Pressable>
 
       <Pressable
         style={styles.btn}
         onPress={() => router.push({ pathname: "/signup", params: { role: selected } })}
       >
-        <Text style={styles.btnText}>Continue</Text>
+        <Text style={styles.btnText}>{t("continue")}</Text>
       </Pressable>
 
       <Pressable onPress={() => router.push("/login")}>
-        <Text style={styles.loginLink}>I already have an account</Text>
+        <Text style={styles.loginLink}>{t("alreadyAccount")}</Text>
       </Pressable>
     </View>
   );

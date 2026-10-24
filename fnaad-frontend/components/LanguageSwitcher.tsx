@@ -32,7 +32,7 @@ export default function LanguageSwitcher() {
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView style={styles.modalKeyboardContainer} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Pressable style={styles.overlay} onPress={() => setModalVisible(false)} accessibilityRole="button" accessibilityLabel="Close language selector">
-          <Pressable style={styles.modalBox} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalBox} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>{t("chooseLanguage")}</Text>
             <TextInput
               style={styles.searchInput}
@@ -64,7 +64,7 @@ export default function LanguageSwitcher() {
                 </Pressable>
               )}
             />
-          </Pressable>
+          </View>
         </Pressable>
         </KeyboardAvoidingView>
       </Modal>

@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl } from "react-native";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl, Image as NativeImage, PanResponder } from "react-native";
 import Image from "../../components/MediaImage";
 import type { DimensionValue } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -14,6 +14,7 @@ import { BlurView } from "expo-blur";
 import ShareSheet from "../../components/ShareSheet";
 import { shadow, RADIUS } from "../../components/shadow";
 import React from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Product = {
   id: number;
@@ -27,6 +28,9 @@ type Product = {
   artist_region: string | null;
   artist_region_display: string | null;
   artist_is_verified: boolean;
+  moods?: string[];
+  verification_level?: string;
+  originality_evidence_count?: number;
   average_rating: number | null;
   review_count: number;
   like_count?: number;
@@ -35,6 +39,14 @@ type Product = {
   public_url: string;
   images: { image: string; thumbnail?: string | null; is_primary: boolean }[];
 };
+
+type SpotlightProduct = Product & { delivered_review_count?: number; spotlight_expires_at?: string | null };
+
+const SHOWCASE_INFO = [
+  { eyebrow: "FROM FNAAD ARTISTS", title: "Art made by people.", subtitle: "Meet independent artists and find something meaningful to keep." },
+  { eyebrow: "ORIGINALITY MATTERS", title: "Discover with confidence.", subtitle: "Every featured artwork comes from a real artist and a real customer experience." },
+  { eyebrow: "COME BACK TOMORROW", title: "Fresh stories, every day.", subtitle: "See who the FNAAD community is celebrating right now." },
+];
 
 const CATEGORIES = [
   { value: "", labelKey: "allCategories" },
@@ -91,9 +103,9 @@ export default function GalleryScreen() {
   const router = useRouter();
   const { loggedIn, initializing, user } = useAuth();
   const { t } = useLanguage();
-  const { colors, mode } = useTheme();
+  const { colors, fonts, mode } = useTheme();
   const layout = useResponsiveLayout();
-  const styles = createStyles(colors, layout);
+  const styles = createStyles(colors, layout, fonts);
   const productColumns = layout.productColumns;
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -102,14 +114,63 @@ export default function GalleryScreen() {
   const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSort, setSelectedSort] = useState("newest");
+  const [selectedMood, setSelectedMood] = useState("");
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
   const [shareProduct, setShareProduct] = useState<Product | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [spotlight, setSpotlight] = useState<SpotlightProduct[]>([]);
+  const [spotlightLoading, setSpotlightLoading] = useState(true);
+  const [countdownNow, setCountdownNow] = useState(Date.now());
+  const [showcaseIndex, setShowcaseIndex] = useState(0);
+  const spotlightPanResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderRelease: (_, gesture) => {
+      if (Math.abs(gesture.dx) > 45 && showcaseItems.length > 1) setShowcaseIndex((current) => gesture.dx < 0 ? (current + 1) % showcaseItems.length : (current - 1 + showcaseItems.length) % showcaseItems.length);
+    },
+  })).current;
 
   const activeFilterCount = [selectedRegion, selectedCategory, selectedSort !== "newest"].filter(Boolean).length;
+  const showcaseItems = [...SHOWCASE_INFO, ...spotlight];
+
+  useEffect(() => {
+    const cacheKey = "fnaad_spotlight_cache_v1";
+    const loadSpotlight = async () => {
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as { savedAt: number; items: SpotlightProduct[] };
+          if (Date.now() - parsed.savedAt < 60_000) {
+            setSpotlight(parsed.items);
+            setSpotlightLoading(false);
+          }
+        }
+        const res = await api.get("/catalog/spotlight/", { skipAuth: true } as any);
+        const items = unwrapList<SpotlightProduct>(res.data);
+        setSpotlight(items);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), items }));
+        await Promise.all(items.slice(0, 6).flatMap((item) => (item.images || []).slice(0, 2).map((image) => image.image ? NativeImage.prefetch(resolveMediaUrl(image.image)!) : Promise.resolve(false))));
+      } catch {
+        setSpotlight((current) => current);
+      } finally {
+        setSpotlightLoading(false);
+      }
+    };
+    void loadSpotlight();
+  }, []);
+
+  useEffect(() => {
+    if (showcaseItems.length < 2) return;
+    const timer = setInterval(() => setShowcaseIndex((current) => (current + 1) % showcaseItems.length), 6500);
+    return () => clearInterval(timer);
+  }, [spotlight.length]);
+
+  useEffect(() => {
+    if (showcaseIndex >= showcaseItems.length) setShowcaseIndex(0);
+  }, [showcaseItems.length, showcaseIndex]);
+  useEffect(() => { const timer = setInterval(() => setCountdownNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
   const loadProducts = (region: string, category: string, search: string, sort: string) => {
     setLoading(true);
@@ -118,6 +179,7 @@ export default function GalleryScreen() {
     if (category) params.append("category", category);
     if (search) params.append("search", search);
     if (sort) params.append("sort", sort);
+    if (selectedMood) params.append("mood", selectedMood);
     const query = params.toString();
     const url = query ? `/catalog/products/?${query}` : "/catalog/products/";
     setApiError(null);
@@ -135,6 +197,7 @@ export default function GalleryScreen() {
     if (selectedCategory) params.append("category", selectedCategory);
     if (debouncedSearch) params.append("search", debouncedSearch);
     if (selectedSort) params.append("sort", selectedSort);
+    if (selectedMood) params.append("mood", selectedMood);
     const query = params.toString();
     const url = query ? `/catalog/products/?${query}` : "/catalog/products/";
     api
@@ -148,7 +211,7 @@ export default function GalleryScreen() {
         setApiError(err.message || "Network error");
       })
       .finally(() => setRefreshing(false));
-  }, [selectedRegion, selectedCategory, selectedSort, debouncedSearch]);
+  }, [selectedRegion, selectedCategory, selectedSort, debouncedSearch, selectedMood]);
 
   const loadFavoriteIds = () => {
     if (!loggedIn) {
@@ -209,7 +272,7 @@ export default function GalleryScreen() {
         .then((res) => setFavoriteIds(new Set(res.data.favorite_ids)))
         .catch((err) => console.log("Failed to load favorite ids:", err.message));
     }
-  }, [selectedRegion, selectedCategory, debouncedSearch, selectedSort]);
+  }, [selectedRegion, selectedCategory, debouncedSearch, selectedSort, selectedMood]);
 
   if (initializing) {
     return (
@@ -228,11 +291,10 @@ export default function GalleryScreen() {
               <Text style={styles.becomeArtistText}>{t("becomeArtist")}</Text>
             </Pressable>
           )}
-          <Image
-            source={require("../../assets/logo-header.png")}
-            style={{ width: 140, height: 48 }}
-            resizeMode="contain"
-          />
+          <View style={styles.brandLockup}>
+            <Image source={require("../../assets/logo-header.png")} style={{ width: 140, height: 42 }} resizeMode="contain" />
+            <Text style={styles.brandSubtitle}>{t("discoverOriginalWork")}</Text>
+          </View>
           <View style={styles.headerActions}><LanguageSwitcher /></View>
         </View>
 
@@ -271,6 +333,19 @@ export default function GalleryScreen() {
           {loggedIn ? <Pressable style={styles.profileButton} onPress={() => router.push("/(tabs)/profile")} accessibilityRole="button" accessibilityLabel="Open profile">
             {user?.profile_photo ? <Image source={{ uri: resolveMediaUrl(user.profile_photo)! }} style={styles.profileImage} /> : <Text style={[styles.profileInitial, { color: colors.accentText }]}>{(user?.username || "U").slice(0, 1).toUpperCase()}</Text>}
           </Pressable> : null}
+        </View>
+
+        <View style={styles.discoveryNav}>
+          {[
+            { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
+            { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
+            { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
+            { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
+          ].map((item) => <Pressable key={item.label} onPress={item.onPress} style={styles.discoveryNavItem}><Text style={styles.discoveryNavText}>{item.label}</Text></Pressable>)}
+        </View>
+        <View style={styles.galleryStatus}>
+          <View style={styles.galleryStatusDot} />
+          <Text style={styles.galleryStatusText}>Today at FNAAD · {spotlight.length || 0} artists in the 24h Spotlight</Text>
         </View>
 
         <Modal visible={filterVisible} animationType="slide" transparent onRequestClose={() => setFilterVisible(false)}>
@@ -361,27 +436,43 @@ export default function GalleryScreen() {
             refreshing={refreshing}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
             ListHeaderComponent={
-              products.length > 0 ? (
-                <Text style={styles.resultsText}>
-                  {products.length} {products.length === 1 ? "artwork" : "artworks"}
+              <View style={styles.discoveryHeader}>
+                {!debouncedSearch && !selectedCategory && !selectedRegion && (() => {
+                  const item = showcaseItems[showcaseIndex];
+                  const spotlightItem = item && !("eyebrow" in item) ? item as SpotlightProduct : null;
+                  const infoItem = !spotlightItem ? item as typeof SHOWCASE_INFO[number] : null;
+                  const primaryImage = spotlightItem?.images?.find((image) => image.is_primary) || spotlightItem?.images?.[0];
+                  const remaining = spotlightItem?.spotlight_expires_at ? Math.max(0, new Date(spotlightItem.spotlight_expires_at).getTime() - countdownNow) : 0;
+                  const remainingHours = Math.floor(remaining / 3600000);
+                  const remainingMinutes = Math.floor((remaining % 3600000) / 60000);
+                  return <View {...spotlightPanResponder.panHandlers} style={[styles.welcomeHero, spotlightItem && styles.welcomeHeroSpotlight, spotlightItem && styles.spotlightHero]}>
+                    {spotlightItem && <Image source={require("../../assets/logo-full-transparent.png")} style={styles.spotlightWatermark} resizeMode="contain" />}
+                    {primaryImage?.image ? <Image source={{ uri: resolveMediaUrl(primaryImage.image)! }} style={styles.heroSpotlightImage} resizeMode="cover" /> : null}
+                    <View style={styles.heroContent}><Text style={styles.heroEyebrow}>{spotlightItem ? "FNAAD SPOTLIGHT · TOP RATED" : infoItem?.eyebrow}</Text><Text style={styles.heroTitle}>{spotlightItem?.title || infoItem?.title}</Text><Text style={styles.heroSubtitle}>{spotlightItem ? `by ${spotlightItem.artist_name} · ${spotlightItem.average_rating?.toFixed(1) || "5.0"} ★` : infoItem?.subtitle}</Text><Pressable style={styles.heroButton} onPress={() => spotlightItem ? router.push(`/product/${spotlightItem.id}`) : setSelectedCategory("painting")}><Text style={styles.heroButtonText}>{spotlightItem ? "View artwork" : "Browse artworks"}</Text><Ionicons name="arrow-forward" size={15} color={colors.accentText} /></Pressable></View>
+                    {showcaseItems.length > 1 && <View style={styles.showcaseDots}>{showcaseItems.map((_, index) => <Pressable key={index} onPress={() => setShowcaseIndex(index)} style={[styles.showcaseDot, index === showcaseIndex && styles.showcaseDotActive]} />)}</View>}
+                  </View>;
+                })()}
+                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>FEATURED TODAY</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>by {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
+                {!debouncedSearch && <><Text style={styles.sectionTitle}>{t("findYourMood")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodRow}>{[{ label: "African heritage", value: "african_heritage", icon: "earth-outline" }, { label: "Calm", value: "calm", icon: "leaf-outline" }, { label: "Bold & modern", value: "bold", icon: "flash-outline" }, { label: "For my home", value: "home_decor", icon: "home-outline" }].map((mood) => <Pressable key={mood.value} style={[styles.moodChip, selectedMood === mood.value && styles.moodChipSelected]} onPress={() => setSelectedMood(selectedMood === mood.value ? "" : mood.value)}><Ionicons name={mood.icon as any} size={16} color={colors.accent} /><Text style={styles.moodText}>{mood.label}</Text></Pressable>)}</ScrollView><View style={styles.trustBanner}><Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.trustTitle}>{t("originalArtMaker")}</Text><Text style={styles.trustText}>{t("passportAvailable")}</Text></View></View></>}
+              </View>
+            }
+            /*
                   {selectedCategory ? ` · ${CATEGORIES.find((c) => c.value === selectedCategory)?.label}` : ""}
                   {selectedRegion ? ` · ${REGIONS.find((r) => r.value === selectedRegion)?.label}` : ""}
-                </Text>
-              ) : null
-            }
-            ListEmptyComponent={
+            */
+            ListEmptyComponent={() => (
               <View style={styles.emptyWrap}>
                 <Ionicons name={apiError ? "wifi-outline" : "images-outline"} size={44} color={apiError ? "#E05252" : colors.textMuted} />
                 <Text style={[styles.emptyTitle, apiError ? { color: "#E05252" } : {}]}>
                   {apiError ? `Cannot reach server:\n${apiError}` : debouncedSearch ? `No results for "${debouncedSearch}"` : t("noProducts")}
                 </Text>
-                {debouncedSearch && !apiError && (
+                {debouncedSearch && !apiError ? (
                   <Pressable onPress={() => setSearchText("")} style={[styles.clearSearchAction, { borderColor: colors.border }]}>
                     <Text style={styles.clearSearchActionText}>Clear search</Text>
                   </Pressable>
-                )}
+                ) : null}
               </View>
-            }
+            )}
             renderItem={({ item }) => {
               const primaryImage = item.images?.find((img) => img.is_primary) || item.images?.[0];
               const imageUrl = resolveMediaUrl(primaryImage?.thumbnail || primaryImage?.image);
@@ -405,6 +496,7 @@ export default function GalleryScreen() {
                         </View>
                       </View>
                     )}
+                    {(item.verification_level === "verified" || (item.originality_evidence_count || 0) > 0) && <View style={styles.originalBadge}><Ionicons name="shield-checkmark" size={11} color="#FFFFFF" /><Text style={styles.originalBadgeText}>{item.verification_level === "verified" ? "FNAAD verified" : "Evidence available"}</Text></View>}
                     <Pressable
                       style={styles.heartButton}
                       onPress={(e) => {
@@ -508,7 +600,8 @@ export default function GalleryScreen() {
 
 function createStyles(
   colors: ReturnType<typeof useTheme>["colors"],
-  layout: ReturnType<typeof useResponsiveLayout>
+  layout: ReturnType<typeof useResponsiveLayout>,
+  fonts: ReturnType<typeof useTheme>["fonts"]
 ) {
   const listGap = layout.isTablet ? 14 : 0;
   const cardWidth: DimensionValue =
@@ -527,9 +620,17 @@ function createStyles(
       paddingHorizontal: layout.horizontalPadding,
     },
     headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    brandLockup: { alignItems: "center", marginLeft: 12 },
+    brandSubtitle: { color: colors.textMuted, fontSize: 7, fontWeight: "800", letterSpacing: 1.4, marginTop: -4 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
     becomeArtistText: { color: colors.accent, fontSize: 12, fontWeight: "700" },
     sanaaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
+    discoveryNav: { flexDirection: "row", alignItems: "center", gap: 18, marginTop: 15, paddingHorizontal: 2 },
+    discoveryNavItem: { paddingVertical: 3 },
+    discoveryNavText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+    galleryStatus: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10, marginBottom: 2 },
+    galleryStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#5FA779" },
+    galleryStatusText: { color: colors.textMuted, fontSize: 11, fontWeight: "600" },
     profileButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", overflow: "hidden" },
     profileImage: { width: 36, height: 36, borderRadius: 18 },
     profileInitial: { fontSize: 15, fontWeight: "800" },
@@ -567,6 +668,37 @@ function createStyles(
     filterClearButtonText: { color: colors.textMuted, fontSize: 14, fontWeight: "600" },
     productList: { flex: 1, width: "100%", marginTop: 2 },
     listContent: { paddingTop: 12, paddingBottom: 28 },
+    discoveryHeader: { width: "100%", paddingBottom: 8 },
+    welcomeHero: { minHeight: 190, flexDirection: "row", backgroundColor: colors.surface, borderRadius: 20, padding: 20, marginTop: 14, marginBottom: 18, borderWidth: 1, borderColor: colors.border, overflow: "hidden", position: "relative" },
+    welcomeHeroSpotlight: { paddingRight: 120 },
+    spotlightHero: { minHeight: 220, backgroundColor: colors.background },
+    spotlightWatermark: { position: "absolute", right: 28, top: 18, width: 150, height: 42, opacity: 0.18, zIndex: 2 },
+    spotlightCountdown: { color: colors.accent, fontSize: 11, fontWeight: "800", marginTop: 8 },
+    heroSpotlightImage: { position: "absolute", right: 0, top: 0, bottom: 0, width: 120, opacity: 0.82 },
+    heroContent: { flex: 1, zIndex: 1 },
+    showcaseDots: { position: "absolute", right: 16, bottom: 14, flexDirection: "row", gap: 5 },
+    showcaseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
+    showcaseDotActive: { width: 18, backgroundColor: colors.accent },
+    heroEyebrow: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
+    heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 27, lineHeight: 32, fontWeight: "700", marginTop: 7 },
+    heroSubtitle: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 7, maxWidth: 290 },
+    heroButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.accent, borderRadius: RADIUS.pill, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 },
+    heroButtonText: { color: colors.accentText, fontSize: 12, fontWeight: "800" },
+    heroMark: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", marginLeft: 8 },
+    featuredCard: { height: 210, borderRadius: 20, overflow: "hidden", marginBottom: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    featuredImage: { width: "100%", height: "100%", backgroundColor: colors.border },
+    featuredOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, paddingTop: 42, backgroundColor: "rgba(0,0,0,0.58)" },
+    featuredEyebrow: { color: "#E8C878", fontSize: 10, fontWeight: "800", letterSpacing: 1.3 },
+    featuredTitle: { color: "#FFFFFF", fontFamily: fonts.display, fontSize: 21, fontWeight: "700", marginTop: 4 },
+    featuredArtist: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 3 },
+    sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginBottom: 9 },
+    moodRow: { gap: 8, paddingBottom: 16 },
+    moodChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: RADIUS.pill, paddingVertical: 9, paddingHorizontal: 12 },
+    moodChipSelected: { borderColor: colors.accent, backgroundColor: colors.surface },
+    moodText: { color: colors.text, fontSize: 11, fontWeight: "700" },
+    trustBanner: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 15 },
+    trustTitle: { color: colors.text, fontSize: 12, fontWeight: "800" },
+    trustText: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
     productRow: { columnGap: listGap, justifyContent: "space-between" },
     resultsText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", marginBottom: 10 },
     skeletonGrid: { flexDirection: "row", flexWrap: "wrap", columnGap: listGap, paddingTop: 12 },
@@ -620,11 +752,13 @@ function createStyles(
       alignItems: "center", justifyContent: "center",
       borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
     },
+    originalBadge: { position: "absolute", left: 9, top: 9, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(42,105,78,0.92)", borderRadius: 999, paddingVertical: 5, paddingHorizontal: 8 },
+    originalBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
     cardBody: { padding: 12 },
     cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
     cardArtist: { color: colors.textMuted, fontSize: 11, fontWeight: "600" },
     cardCategory: { color: colors.accent, fontSize: 10, marginTop: 1, textTransform: "uppercase", fontWeight: "700", letterSpacing: 0.4 },
-    cardTitle: { color: colors.text, fontSize: 14, fontWeight: "700", lineHeight: 18, marginTop: 2 },
+    cardTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 15, fontWeight: "700", lineHeight: 19, marginTop: 2 },
     cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
     cardPrice: { color: colors.accent, fontSize: 14, fontWeight: "800", letterSpacing: 0.2 },
     regionTag: { flexDirection: "row", alignItems: "center", gap: 3, maxWidth: 100 },

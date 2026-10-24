@@ -5,6 +5,7 @@ import {
   getSiteSettings,
   updateSiteSettings,
   resolveMediaUrl,
+  adminApi,
 } from "../services/api";
 import MediaImage from "../components/MediaImage";
 
@@ -27,12 +28,29 @@ export default function Moderation() {
   const [requireApproval, setRequireApproval] = useState<boolean | null>(null);
   const [togglingSetting, setTogglingSetting] = useState(false);
   const [decidingId, setDecidingId] = useState<number | null>(null);
+  const [flaggedCopies, setFlaggedCopies] = useState<any[]>([]);
+  const [evidenceReviews, setEvidenceReviews] = useState<any[]>([]);
 
   const loadPending = () => {
     getPendingProducts()
       .then((res) => setProducts(res.data))
       .catch((err) => console.error("Pending products error:", err))
       .finally(() => setLoading(false));
+    adminApi.getFlaggedCopies().then((res) => setFlaggedCopies(res.data || [])).catch((err) => console.error("Flagged copies error:", err));
+    adminApi.getEvidenceReviews().then((res) => setEvidenceReviews(res.data || [])).catch((err) => console.error("Evidence review error:", err));
+  };
+
+  const handleCopyDecision = async (id: number, confirm: boolean) => {
+    setDecidingId(id);
+    try {
+      const response = confirm ? await adminApi.confirmCopy(id) : await adminApi.overruleCopy(id);
+      setFlaggedCopies((prev) => prev.filter((p) => p.id !== id));
+      if (!confirm && response.data?.status === "pending") setProducts((prev) => [...prev, response.data]);
+    } catch (err) {
+      console.error("Copy decision error:", err);
+    } finally {
+      setDecidingId(null);
+    }
   };
 
   useEffect(() => {
@@ -72,6 +90,29 @@ export default function Moderation() {
     <div>
       <h2 className="font-display text-2xl text-text mb-1">Moderation</h2>
       <p className="text-muted text-sm mb-6">Artworks pending review.</p>
+
+      {evidenceReviews.length > 0 && <section className="mb-8"><h3 className="font-display text-lg text-text mb-2">Originality evidence review</h3><div className="space-y-3">{evidenceReviews.map((item) => <div key={item.id} className="border border-border bg-surface rounded-lg p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-text font-semibold text-sm">{item.title}</p><p className="text-muted text-xs mt-1">{item.artist_name} · {item.creation_method} · {item.copy_strikes} copy strikes</p><p className="text-faint text-xs mt-1">Verification: {item.verification_level} · Passport: {String(item.passport_token).slice(0, 8)}</p>{item.copy_of_title && <p className="text-danger text-xs mt-1">Hash match: possible copy of “{item.copy_of_title}” by {item.copy_of_artist} ({Math.round((item.copy_confidence || 0) * 100)}%)</p>}</div><div className="flex gap-2">{item.evidence.map((e: any) => <a key={e.id} href={e.file} target="_blank" rel="noreferrer" className="text-gold-light text-xs underline">Open evidence</a>)}</div></div><div className="mt-3 flex gap-2"><button onClick={async () => { await adminApi.decideEvidence(item.evidence[0]?.id, true); setEvidenceReviews((prev) => prev.map((x) => x.id === item.id ? { ...x, verification_level: "verified" } : x)); }} className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2">Approve verification</button><button onClick={async () => { if (item.evidence[0]?.id) await adminApi.decideEvidence(item.evidence[0].id, false); }} className="border border-border text-muted text-xs font-bold rounded-md px-3 py-2">Keep unverified</button></div></div>)}</div></section>}
+
+      {flaggedCopies.length > 0 && (
+        <section className="mb-8">
+          <h3 className="font-display text-lg text-danger mb-2">Possible copies requiring review</h3>
+          <div className="space-y-3">
+            {flaggedCopies.map((product) => (
+              <div key={product.id} className="border border-danger/40 bg-surface rounded-lg p-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-text font-semibold text-sm">{product.title}</p>
+                  <p className="text-muted text-xs mt-1">Artist: {product.artist_name || product.artist?.brand_name || "Unknown"}</p>
+                  <p className="text-danger text-xs mt-1">{product.rejection_reason || "Possible copy detected."}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => handleCopyDecision(product.id, true)} disabled={decidingId === product.id} className="bg-danger text-bg text-xs font-bold rounded-md px-3 py-2">Confirm copy</button>
+                  <button onClick={() => handleCopyDecision(product.id, false)} disabled={decidingId === product.id} className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2">Clear flag</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Approval toggle */}
       <div className="border border-border bg-surface rounded-lg p-5 mb-8 flex items-center justify-between">

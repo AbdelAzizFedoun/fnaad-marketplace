@@ -37,6 +37,10 @@ type Product = {
   public_url: string;
   like_count?: number;
   comment_count?: number;
+  verification_level?: string;
+  creation_method?: string;
+  passport_token?: string;
+  originality_evidence_count?: number;
 };
 
 type Review = {
@@ -406,6 +410,10 @@ export default function ProductDetailScreen() {
             {product.artist_is_verified && <Text style={[styles.artist, styles.verifiedLabel]}>Verified</Text>}
             <Text style={styles.artistArrow}>  →</Text>
           </Pressable>
+          <Pressable onPress={() => router.push(`/artist/${product.artist_id}`)} style={styles.artistProfileLink}>
+            <Ionicons name="person-circle-outline" size={15} color={colors.accent} />
+            <Text style={styles.artistProfileLinkText}>View artist profile and bio</Text>
+          </Pressable>
           <Text style={styles.price}>{product.price_xaf} XAF</Text>
           <View style={styles.socialSummary}>
             <Text style={styles.socialSummaryText}>{product.like_count || 0} {(product.like_count || 0) === 1 ? t("like") : t("like") + "s"}</Text>
@@ -430,6 +438,12 @@ export default function ProductDetailScreen() {
           {product.description ? (
             <Text style={styles.description}>{product.description}</Text>
           ) : null}
+
+          <View style={styles.passportBox}>
+            <View style={styles.passportHeader}><Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.passportTitle}>FNAAD Originality Passport</Text><Text style={styles.passportSubtitle}>{product.verification_level === "verified" ? "FNAAD verified artwork" : "Artist-declared artwork"}</Text></View></View>
+            <View style={styles.passportDetails}><Text style={styles.passportDetail}>Creation: <Text style={styles.passportValue}>{(product.creation_method || "original").replace("_", " ")}</Text></Text><Text style={styles.passportDetail}>Evidence: <Text style={styles.passportValue}>{product.originality_evidence_count ? "Available" : "Not submitted"}</Text></Text></View>
+            {product.passport_token && <Text style={styles.passportId}>Passport ID · {product.passport_token.slice(0, 8).toUpperCase()}</Text>}
+          </View>
 
           <View style={styles.paymentBox}>
             <Text style={styles.paymentLabel}>{t("paymentTitle")}</Text>
@@ -626,7 +640,7 @@ function createStyles(
       maxWidth: layout.isDesktop ? layout.maxContentWidth : undefined,
       padding: 20,
     },
-    title: { color: colors.text, fontSize: 24, fontWeight: "800", lineHeight: 30 },
+    title: { color: colors.text, fontFamily: "Georgia", fontSize: 25, fontWeight: "700", lineHeight: 31 },
     category: { color: colors.accent, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: "700" },
     ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
     ratingText: { color: colors.textMuted, fontSize: 13 },
@@ -634,6 +648,8 @@ function createStyles(
     artist: { color: colors.textMuted, fontSize: 14, fontWeight: "600" },
     verifiedLabel: { color: "#5FA779", fontSize: 12, marginLeft: 4, fontWeight: "600" },
     artistArrow: { color: colors.accent, fontSize: 14, fontWeight: "700", marginLeft: 4 },
+    artistProfileLink: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 7 },
+    artistProfileLinkText: { color: colors.accent, fontSize: 12, fontWeight: "700" },
     price: { color: colors.accent, fontSize: 22, fontWeight: "800", marginTop: 12, letterSpacing: 0.3 },
     socialSummary: { flexDirection: "row", justifyContent: "space-between", marginTop: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: colors.border },
     socialSummaryText: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
@@ -642,6 +658,14 @@ function createStyles(
     socialActionText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
     likedText: { color: "#1877F2" },
     description: { color: colors.text, fontSize: 15, marginTop: 18, lineHeight: 22, opacity: 0.88 },
+    passportBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 15, marginTop: 22, backgroundColor: colors.surface },
+    passportHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+    passportTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+    passportSubtitle: { color: colors.accent, fontSize: 11, marginTop: 3, fontWeight: "700" },
+    passportDetails: { flexDirection: "row", gap: 20, marginTop: 14 },
+    passportDetail: { color: colors.textMuted, fontSize: 12 },
+    passportValue: { color: colors.text, fontWeight: "700" },
+    passportId: { color: colors.textMuted, fontSize: 10, marginTop: 12, letterSpacing: 0.4 },
     paymentBox: {
       borderWidth: 1, borderColor: colors.border, borderRadius: 12,
       padding: 16, marginTop: 24, backgroundColor: colors.surface,

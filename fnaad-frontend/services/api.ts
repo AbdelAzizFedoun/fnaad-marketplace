@@ -7,7 +7,11 @@ const normalizeApiBaseUrl = (raw?: string) => {
   // Strip all whitespace, accidental newlines, or spaces
   const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
   if (!sanitized) {
-    return "https://fnaad-marketplace-api.onrender.com/api";
+    return "http://10.0.251.143:8000/api";
+
+
+
+    
   }
   return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
@@ -192,6 +196,8 @@ export const createProduct = (data: {
   description: string;
   price_xaf: number;
   category: string;
+  creation_method?: string;
+  moods?: string[];
 }) => api.post("/catalog/products/create/", data);
 
 export const uploadProductImage = async (
@@ -203,9 +209,26 @@ export const uploadProductImage = async (
   const formData = new FormData();
   const fileName = image.fileName || `artwork-${Date.now()}.jpg`;
   const mimeType = image.mimeType || "image/jpeg";
-  formData.append("image", Platform.OS === "web" && image.file
-    ? image.file
-    : ({ uri: image.uri, name: fileName, type: mimeType } as any));
+
+  if (Platform.OS === "web") {
+    let fileBlob: Blob | File | null = image.file || null;
+    if (!fileBlob && image.uri) {
+      try {
+        const response = await fetch(image.uri);
+        fileBlob = await response.blob();
+      } catch (err) {
+        console.warn("Could not fetch blob for image uri on web:", err);
+      }
+    }
+    if (fileBlob) {
+      formData.append("image", fileBlob, fileName);
+    } else {
+      formData.append("image", { uri: image.uri, name: fileName, type: mimeType } as any);
+    }
+  } else {
+    formData.append("image", { uri: image.uri, name: fileName, type: mimeType } as any);
+  }
+
   formData.append("is_primary", isPrimary ? "true" : "false");
   formData.append("order", String(order));
 
@@ -218,6 +241,24 @@ export const uploadProductImage = async (
     headers,
   });
 };
+
+export const uploadCreationEvidence = async (
+  productId: number,
+  file: { uri: string; fileName?: string | null; mimeType?: string | null; file?: File | null },
+  note = "",
+) => {
+  const formData = new FormData();
+  const fileName = file.fileName || `creation-evidence-${Date.now()}.jpg`;
+  const mimeType = file.mimeType || "image/jpeg";
+  if (Platform.OS === "web") {
+    const blob = file.file || await (await fetch(file.uri)).blob();
+    formData.append("evidence_file", blob, fileName);
+  } else {
+    formData.append("evidence_file", { uri: file.uri, name: fileName, type: mimeType } as any);
+  }
+  formData.append("note", note);
+  return api.post(`/catalog/products/${productId}/evidence/`, formData);
+};
 export const sendInquiry = (productId: number) =>
   api.post("/orders/create/", { product: productId });
 
@@ -228,19 +269,28 @@ export const getPendingProducts = () => api.get("/catalog/products/pending/");
 export const approveProduct = (id: number, status: "approved" | "rejected") =>
   api.patch(`/catalog/products/${id}/approve/`, { status });
 
-export const resolveMediaUrl = (path?: string) => {
+export const getAdminSpotlightFeatures = () => api.get("/catalog/admin/spotlight/");
+export const approveAdminSpotlight = (id: number) => api.post(`/catalog/admin/spotlight/${id}/approve/`);
+export const getMySpotlightFeatures = () => api.get("/catalog/spotlight/mine/");
+export const approveMySpotlight = (id: number) => api.post(`/catalog/spotlight/${id}/approve/`);
+export const requestSpotlight = (productId: number) => api.post("/catalog/spotlight/request/", { product_id: productId });
+
+export const resolveMediaUrl = (path?: string | null) => {
   if (!path) return null;
 
-  // Django may return an absolute URL built from its internal request host.
-  // Always serve media from the same public origin the app uses for the API,
-  // so native builds do not try to load an unreachable LAN address.
-  // With no configured origin (relative fallback), keep same-origin paths.
-  if (!API_ORIGIN) {
-    if (path.startsWith("http")) return path.replace(/^https?:\/\/[^/]+/, "");
-    return path.startsWith("/") ? path : `/${path}`;
+  // Django may return an absolute URL built from its internal request host
+  // (e.g. http:// behind Render's reverse proxy, or a local LAN address in dev).
+  // Always rewrite to the correct public origin so images load in every env.
+  try {
+    // Parse relative paths against API_ORIGIN; absolute URLs are parsed as-is.
+    const base = API_ORIGIN || "http://10.0.251.236:8000";
+    const url = new URL(path, base);
+    // Always use our known public origin – this fixes http→https and wrong host.
+    return `${base.replace(/\/+$/, "")}${url.pathname}${url.search}`;
+  } catch {
+    // Malformed URL: return as-is so the caller's fallback UI still shows.
+    return path;
   }
-  const url = new URL(path, API_ORIGIN);
-  return `${API_ORIGIN}${url.pathname}${url.search}`;
 };
 
 export const isNgrokMediaUrl = (uri: string) => {
@@ -297,6 +347,7 @@ export const getConversationDetail = (id: number) =>
 export const deleteConversationMessages = (conversationId: number, messageIds?: number[]) =>
   api.delete(`/catalog/conversations/${conversationId}/messages/`, {
     data: messageIds ? { message_ids: messageIds } : {},
+    params: messageIds?.length ? { message_ids: messageIds.join(",") } : undefined,
   });
 
 export const sendMessage = (conversationId: number, text: string, replyToId?: number) =>
@@ -440,6 +491,8 @@ export const getArtistProfile = (artistId: number) => api.get(`/catalog/artists/
 
 export const getArtistProducts = (artistId: number) =>
   api.get(`/catalog/artists/${artistId}/products/`);
+export const getArtistFollowStatus = (artistId: number) => api.get(`/catalog/artists/${artistId}/follow/`);
+export const toggleArtistFollow = (artistId: number) => api.post(`/catalog/artists/${artistId}/follow/`);
 
 export const getMyArtistProfile = () => api.get("/catalog/artists/me/");
 
@@ -605,19 +658,20 @@ export const getMySubscription = () => api.get("/billing/me/");
 
 export const getSubscriptionPlans = () => api.get("/billing/plans/");
 
-export const startSubscriptionPayment = (planId: number, phoneNumber?: string, method?: "orange" | "mtn", amountXaf?: number) =>
-  api.post("/billing/campay/start/", {
+export const startSubscriptionPayment = (planId: number, phoneNumber?: string, method?: "orange" | "mtn") =>
+  api.post("/billing/fapshi/start/", {
     plan_id: planId,
     ...(phoneNumber ? { phone_number: phoneNumber } : {}),
     ...(method ? { method } : {}),
-    ...(amountXaf !== undefined ? { amount_xaf: amountXaf } : {}),
   });
+export const startRegistrationFeePayment = (phoneNumber?: string, method?: "orange" | "mtn") =>
+  api.post("/billing/fapshi/registration-fee/start/", { phone_number: phoneNumber, method });
 
 export const confirmSubscriptionPayment = (externalReference: string) =>
-  api.post("/billing/campay/confirm/", { external_reference: externalReference });
+  api.post("/billing/fapshi/confirm/", { external_reference: externalReference });
 
 export const getSubscriptionPaymentStatus = (externalReference: string) =>
-  api.get(`/billing/campay/payments/${externalReference}/`);
+  api.get(`/billing/fapshi/payments/${externalReference}/`);
 
 export const requestPasswordReset = (email: string) =>
   api.post("/accounts/request-password-reset/", { email });
