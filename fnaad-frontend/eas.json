@@ -17,15 +17,15 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://4115-51-178-86-160.ngrok-free.app/api",
-        "EXPO_PUBLIC_API_ORIGIN": "https://4115-51-178-86-160.ngrok-free.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://fnaad-api.onrender.com/api",
+        "EXPO_PUBLIC_API_ORIGIN": "https://fnaad-api.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://4115-51-178-86-160.ngrok-free.app/api",
-        "EXPO_PUBLIC_API_ORIGIN": "https://4115-51-178-86-160.ngrok-free.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://fnaad-api.onrender.com/api",
+        "EXPO_PUBLIC_API_ORIGIN": "https://fnaad-api.onrender.com"
       }
     }
   },
