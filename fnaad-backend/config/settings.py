@@ -59,10 +59,12 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         "ALLOWED_HOSTS",
-        "localhost,127.0.0.1"
+        "*"
     ).split(",")
     if host.strip()
 ]
+if "*" not in ALLOWED_HOSTS and ".onrender.com" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".onrender.com")
 
 
 # Application definition
@@ -288,6 +290,9 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 for _csrf in [
+    "https://*.onrender.com",
+    "https://fnaad-api.onrender.com",
+    "https://fnaad-admin.onrender.com",
     "http://10.0.251.143:5173",
     "http://10.0.251.143:8000",
     "http://localhost:5173",
