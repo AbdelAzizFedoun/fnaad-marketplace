@@ -39,7 +39,7 @@ export default function LoginScreen() {
       router.push("/");
     } catch (err: any) {
       if (!err.response) {
-        setErrorMsg("Cannot reach the server. Check that your phone and PC are on the same Wi-Fi and restart the development build.");
+        setErrorMsg(t("serverUnreachable") || "Cannot reach the server. Please check your internet connection.");
       } else {
         setErrorMsg(t("loginError"));
       }
