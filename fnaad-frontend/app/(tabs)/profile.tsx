@@ -42,15 +42,35 @@ export default function ProfileHubScreen() {
   if (!loggedIn) {
     return (
       <View style={[styles.loginGate, { backgroundColor: colors.background }]}>
-        <Text style={[styles.loginGateText, { color: colors.text }]}>
-          {t("loginToAccessProfile")}
-        </Text>
-        <Pressable
-          style={[styles.loginButton, { backgroundColor: colors.accent }]}
-          onPress={() => router.push("/login")}
-        >
-          <Text style={[styles.loginButtonText, { color: colors.accentText }]}>{t("loginBtn")}</Text>
-        </Pressable>
+        <View style={styles.loginGateCard}>
+          <View style={[styles.loginGateIconWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <Ionicons name="person-circle-outline" size={54} color={colors.accent} />
+          </View>
+          <Text style={[styles.loginGateTitle, { color: colors.text }]}>
+            {t("welcomeToFnaad") || "Welcome to FNAAD Art"}
+          </Text>
+          <Text style={[styles.loginGateText, { color: colors.textMuted }]}>
+            {t("loginToAccessProfile") || "Log in to track orders, save favorites, or manage your artist shop."}
+          </Text>
+
+          <Pressable
+            style={[styles.loginButton, { backgroundColor: colors.accent }]}
+            onPress={() => router.push("/login")}
+          >
+            <Text style={[styles.loginButtonText, { color: colors.accentText }]}>{t("loginBtn")}</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.accentText} style={{ marginLeft: 6 }} />
+          </Pressable>
+
+          <Pressable
+            style={[styles.registerButton, { borderColor: colors.accent, backgroundColor: colors.surface }]}
+            onPress={() => router.push("/role-select")}
+          >
+            <Ionicons name="color-palette-outline" size={16} color={colors.accent} style={{ marginRight: 6 }} />
+            <Text style={[styles.registerButtonText, { color: colors.accent }]}>
+              {t("becomeArtist") || "Create Account / Become an Artist"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -98,9 +118,14 @@ export default function ProfileHubScreen() {
 
 const styles = StyleSheet.create({
   loginGate: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
-  loginGateText: { fontSize: 16, marginBottom: 16, textAlign: "center" },
-  loginButton: { borderRadius: 8, paddingVertical: 12, paddingHorizontal: 24 },
-  loginButtonText: { fontWeight: "700" },
+  loginGateCard: { width: "100%", maxWidth: 400, alignItems: "center" },
+  loginGateIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", borderWidth: 1, marginBottom: 16 },
+  loginGateTitle: { fontSize: 22, fontWeight: "800", marginBottom: 8, textAlign: "center" },
+  loginGateText: { fontSize: 13, lineHeight: 18, marginBottom: 24, textAlign: "center", paddingHorizontal: 12 },
+  loginButton: { width: "100%", borderRadius: 12, paddingVertical: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  loginButtonText: { fontWeight: "700", fontSize: 14 },
+  registerButton: { width: "100%", borderRadius: 12, paddingVertical: 14, borderWidth: 1.5, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  registerButtonText: { fontWeight: "700", fontSize: 14 },
   title: { fontSize: 24, fontWeight: "700" },
   profileCard: { borderWidth: 1, borderRadius: 14, padding: 20, alignItems: "center", marginBottom: 18 },
   avatar: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 12 },

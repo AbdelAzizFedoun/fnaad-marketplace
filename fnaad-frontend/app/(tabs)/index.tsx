@@ -285,17 +285,51 @@ export default function GalleryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.page}>
+        {/* ── TOP NAVBAR: Profile/Login | FNAAD Art | Join & Language ── */}
         <View style={styles.headerRow}>
-          {!loggedIn && (
-            <Pressable onPress={() => router.push("/role-select")}>
-              <Text style={styles.becomeArtistText}>{t("becomeArtist")}</Text>
+          {loggedIn ? (
+            <Pressable
+              style={styles.profileButton}
+              onPress={() => router.push("/(tabs)/profile")}
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+            >
+              {user?.profile_photo ? (
+                <Image source={{ uri: resolveMediaUrl(user.profile_photo)! }} style={styles.profileImage} />
+              ) : (
+                <Text style={[styles.profileInitial, { color: colors.accentText }]}>
+                  {(user?.username || "U").slice(0, 1).toUpperCase()}
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => router.push("/login")}
+              style={styles.navLoginBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Log in"
+            >
+              <Ionicons name="log-in-outline" size={16} color={colors.accent} style={{ marginRight: 4 }} />
+              <Text style={styles.navLoginText}>{t("loginBtn")}</Text>
             </Pressable>
           )}
-          <View style={styles.brandLockup}>
-            <Image source={require("../../assets/logo-header.png")} style={{ width: 140, height: 42 }} resizeMode="contain" />
-            <Text style={styles.brandSubtitle}>{t("discoverOriginalWork")}</Text>
+
+          <Text style={styles.brandName}>FNAAD Art</Text>
+
+          <View style={styles.headerActions}>
+            {!loggedIn && (
+              <Pressable
+                onPress={() => router.push("/role-select")}
+                style={styles.becomeArtistPill}
+                accessibilityRole="button"
+                accessibilityLabel="Become an artist"
+              >
+                <Ionicons name="color-palette-outline" size={14} color={colors.accentText} style={{ marginRight: 4 }} />
+                <Text style={styles.becomeArtistPillText}>Join</Text>
+              </Pressable>
+            )}
+            <LanguageSwitcher />
           </View>
-          <View style={styles.headerActions}><LanguageSwitcher /></View>
         </View>
 
         <View style={styles.searchRow}>
@@ -322,26 +356,27 @@ export default function GalleryScreen() {
           </Pressable>
         </View>
 
+        {/* ── AI & Discovery Navigation ── */}
         <View style={styles.sanaaRow}>
           <Pressable
             style={styles.aiButton}
             onPress={() => router.push("/assistant")}
           >
-            <Ionicons name="sparkles-outline" size={16} color={colors.accent} style={{ marginRight: 6 }} />
+            <Ionicons name="sparkles-outline" size={15} color={colors.accent} style={{ marginRight: 5 }} />
             <Text style={styles.aiButtonText}>{t("askSanaa")}</Text>
           </Pressable>
-          {loggedIn ? <Pressable style={styles.profileButton} onPress={() => router.push("/(tabs)/profile")} accessibilityRole="button" accessibilityLabel="Open profile">
-            {user?.profile_photo ? <Image source={{ uri: resolveMediaUrl(user.profile_photo)! }} style={styles.profileImage} /> : <Text style={[styles.profileInitial, { color: colors.accentText }]}>{(user?.username || "U").slice(0, 1).toUpperCase()}</Text>}
-          </Pressable> : null}
-        </View>
-
-        <View style={styles.discoveryNav}>
-          {[
-            { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
-            { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
-            { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
-            { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
-          ].map((item) => <Pressable key={item.label} onPress={item.onPress} style={styles.discoveryNavItem}><Text style={styles.discoveryNavText}>{item.label}</Text></Pressable>)}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickNavScroll}>
+            {[
+              { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
+              { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
+              { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
+              { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
+            ].map((item) => (
+              <Pressable key={item.label} onPress={item.onPress} style={styles.quickNavItem}>
+                <Text style={styles.quickNavText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
         <View style={styles.galleryStatus}>
           <View style={styles.galleryStatusDot} />
@@ -437,6 +472,35 @@ export default function GalleryScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
             ListHeaderComponent={
               <View style={styles.discoveryHeader}>
+                {/* ── Become an Artist Invitation Banner (for visitors) ── */}
+                {!loggedIn && (
+                  <View style={styles.artistInviteBanner}>
+                    <View style={styles.artistInviteLeft}>
+                      <View style={styles.artistInviteIconCircle}>
+                        <Ionicons name="color-palette" size={24} color={colors.accent} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.artistInviteTitle}>
+                          {t("joinAsArtistBannerTitle") || "Are you an Artist or Artisan?"}
+                        </Text>
+                        <Text style={styles.artistInviteSub}>
+                          {t("joinAsArtistBannerSub") || "Open your mobile gallery, gain verified collectors & receive Mobile Money payouts."}
+                        </Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={styles.artistInviteCta}
+                      onPress={() => router.push("/role-select")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Join as an artist"
+                    >
+                      <Text style={styles.artistInviteCtaText}>
+                        {t("becomeArtist") || "Become an Artist"}
+                      </Text>
+                      <Ionicons name="arrow-forward" size={14} color={colors.accentText} style={{ marginLeft: 4 }} />
+                    </Pressable>
+                  </View>
+                )}
                 {!debouncedSearch && !selectedCategory && !selectedRegion && (() => {
                   const item = showcaseItems[showcaseIndex];
                   const spotlightItem = item && !("eyebrow" in item) ? item as SpotlightProduct : null;
@@ -619,15 +683,102 @@ function createStyles(
       paddingTop: layout.topPadding,
       paddingHorizontal: layout.horizontalPadding,
     },
-    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-    brandLockup: { alignItems: "center", marginLeft: 12 },
-    brandSubtitle: { color: colors.textMuted, fontSize: 7, fontWeight: "800", letterSpacing: 1.4, marginTop: -4 },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingVertical: 4 },
+    brandName: { color: colors.text, fontSize: 18, fontWeight: "800", letterSpacing: 0.3, flex: 1, textAlign: "center" },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
     becomeArtistText: { color: colors.accent, fontSize: 12, fontWeight: "700" },
-    sanaaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
-    discoveryNav: { flexDirection: "row", alignItems: "center", gap: 18, marginTop: 15, paddingHorizontal: 2 },
-    discoveryNavItem: { paddingVertical: 3 },
-    discoveryNavText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+    navLoginBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    navLoginText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    becomeArtistPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.accent,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 18,
+      elevation: 2,
+      shadowColor: colors.accent,
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+    },
+    becomeArtistPillText: {
+      color: colors.accentText,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    artistInviteBanner: {
+      backgroundColor: colors.surface,
+      borderWidth: 1.5,
+      borderColor: colors.accent,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      elevation: 2,
+      shadowColor: colors.accent,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+    },
+    artistInviteLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 12,
+    },
+    artistInviteIconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    artistInviteTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    artistInviteSub: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+    artistInviteCta: {
+      backgroundColor: colors.accent,
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "flex-start",
+    },
+    artistInviteCtaText: {
+      color: colors.accentText,
+      fontSize: 13,
+      fontWeight: "800",
+    },
+    sanaaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+    quickNavScroll: { alignItems: "center", gap: 4 },
+    quickNavItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    quickNavText: { color: colors.text, fontSize: 11, fontWeight: "700" },
     galleryStatus: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10, marginBottom: 2 },
     galleryStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#5FA779" },
     galleryStatusText: { color: colors.textMuted, fontSize: 11, fontWeight: "600" },
@@ -707,17 +858,7 @@ function createStyles(
     ratingCount: { color: colors.textMuted, fontSize: 11 },
     clearSearchAction: { marginTop: 16, borderWidth: 1, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
     clearSearchActionText: { color: colors.text, fontSize: 13, fontWeight: "700" },
-    aiButton: {
-      borderWidth: 1.5,
-      borderColor: colors.accent,
-      borderRadius: RADIUS.pill,
-      paddingVertical: 11,
-      paddingHorizontal: 18,
-      flex: 1,
-      backgroundColor: colors.surface,
-      flexDirection: "row",
-      alignItems: "center",
-    },
+    aiButton: { borderWidth: 1.5, borderColor: colors.accent, borderRadius: RADIUS.pill, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center" },
     aiButtonText: {
       color: colors.accent,
       fontWeight: "700",
