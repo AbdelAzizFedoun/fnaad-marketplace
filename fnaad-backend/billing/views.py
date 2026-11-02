@@ -21,7 +21,7 @@ def get_subscription_plan(plan_id: int):
     return None
 
 
-REGISTRATION_FEE_XAF = 500
+REGISTRATION_FEE_XAF = 5  # demo: 5 XAF
 
 
 def fapshi_headers():

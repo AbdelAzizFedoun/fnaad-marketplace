@@ -17,9 +17,9 @@ type PaymentMethod = "orange" | "mtn";
 type Step = "plan" | "method" | "pending";
 
 const PLANS: Plan[] = [
-  { id: 1, duration_months: 1, price_xaf: 2000 },
-  { id: 2, duration_months: 2, price_xaf: 4000 },
-  { id: 3, duration_months: 3, price_xaf: 6500 },
+  { id: 1, duration_months: 1, price_xaf: 10 },
+  { id: 2, duration_months: 2, price_xaf: 17 },
+  { id: 3, duration_months: 3, price_xaf: 25 },
 ];
 
 export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () => void }) {
@@ -108,8 +108,8 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
       setError(t("subscriptionInvalidPhoneError"));
       return;
     }
-    if (selectedPlan.price_xaf < 100) {
-      setError("Fapshi requires at least 100 XAF. Update the subscription prices in the backend settings.");
+    if (selectedPlan.price_xaf < 1) {
+      setError("Price must be at least 1 XAF.");
       return;
     }
     setLoading(true);
