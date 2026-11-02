@@ -14,6 +14,12 @@ type Plan = {
 
 type Step = "plan" | "method" | "pending";
 
+const DEFAULT_PLANS: Plan[] = [
+  { id: 1, duration_months: 1, price_xaf: 10 },
+  { id: 2, duration_months: 2, price_xaf: 17 },
+  { id: 3, duration_months: 3, price_xaf: 25 },
+];
+
 export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () => void }) {
   const { t } = useLanguage();
   const { colors } = useTheme();
@@ -21,9 +27,9 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
   const styles = createStyles(colors, width);
 
   const [step, setStep] = useState<Step>("plan");
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(DEFAULT_PLANS[0]);
+  const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
+  const [plansLoading, setPlansLoading] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [externalReference, setExternalReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

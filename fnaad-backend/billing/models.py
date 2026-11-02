@@ -26,7 +26,7 @@ class Subscription(models.Model):
     trial_start_date = models.DateTimeField(auto_now_add=True)
     trial_end_date = models.DateTimeField()
     current_period_end = models.DateTimeField(null=True, blank=True)
-    monthly_price_xaf = models.PositiveIntegerField(default=2000)
+    monthly_price_xaf = models.PositiveIntegerField(default=10)
     last_payment_id = models.CharField(max_length=100, blank=True)
     registration_fee_paid = models.BooleanField(default=True)
 

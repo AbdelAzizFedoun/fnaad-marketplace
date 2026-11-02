@@ -61,6 +61,12 @@ services:
         sync: false
       - key: CAMPAY_WEBHOOK_KEY
         sync: false
+      - key: SUBSCRIPTION_PRICE_1_MONTH
+        value: "10"
+      - key: SUBSCRIPTION_PRICE_2_MONTHS
+        value: "17"
+      - key: SUBSCRIPTION_PRICE_3_MONTHS
+        value: "25"
       - key: FAPSHI_BASE_URL
         value: https://sandbox.fapshi.com
       - key: FAPSHI_APIUSER
