@@ -134,12 +134,23 @@ class ArtistProfile(models.Model):
 
 class ArtistStudioPhoto(models.Model):
     artist = models.ForeignKey(ArtistProfile, on_delete=models.CASCADE, related_name="studio_photos")
-    image = models.ImageField(upload_to="artists/studio/")
+    image = models.ImageField(upload_to="artists/studio/", null=True, blank=True)
+    video = models.FileField(upload_to="artists/studio/videos/", blank=True)
+    duration_seconds = models.PositiveSmallIntegerField(null=True, blank=True)
     caption = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(image__isnull=False, image__gt="", video="")
+                    | models.Q(image="", video__gt="")
+                ),
+                name="studio_media_exactly_one_file",
+            ),
+        ]
 
 
 class ArtistFollow(models.Model):

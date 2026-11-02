@@ -10,15 +10,16 @@ from .views import (
     ProductImageDeleteView, AdminDashboardStatsView, RegistrationStatsView,
     AdminArtistListView, AdminArtistVerifyView,
     ArtistProfileDetailView, ArtistProductsListView, ArtistFollowToggleView,
-    MyArtistProfileView, ReportConversationView,
+    MyArtistProfileView, MyArtistStudioPhotoListCreateView, MyArtistStudioPhotoDeleteView,
+    ReportConversationView,
     AdminReportedConversationsListView, AdminArtistSuspendView,
     ProductMarkSoldView, ToggleFavoriteView, MyFavoritesListView, MyFavoriteIdsView, 
     ProductCommentListCreateView, CreateReviewView, ProductReviewsListView, MyReviewableConversationsView, MyArtistAnalyticsView,ToggleProductLikeView,
     CreateCommissionRequestView, MyCommissionRequestsView, OpenCommissionRequestsListView,
     RespondToCommissionView, UpdateCommissionStatusView, CustomerProfileView, 
-    product_public_view, SiteSettingsView,AssistantChatView,
+    product_public_view, SiteSettingsView,
     UnreadMessageCountView,
-    ResumeCancelledConversationView, SanaaImageRankView, SpotlightListView, MySpotlightFeaturesView, CreateSpotlightRequestView, ArtistSpotlightApprovalView, AdminSpotlightFeaturesView, AdminSpotlightApprovalView,
+    ResumeCancelledConversationView, SpotlightListView, MySpotlightFeaturesView, CreateSpotlightRequestView, ArtistSpotlightApprovalView, AdminSpotlightFeaturesView, AdminSpotlightApprovalView,
 )
 from .admin_views import FlaggedCopiesListView, ConfirmCopyView, OverruleCopyView, EvidenceReviewListView, EvidenceReviewDecisionView
 
@@ -65,6 +66,8 @@ urlpatterns = [
     path("artists/<int:pk>/", ArtistProfileDetailView.as_view(), name="artist-profile"),
     path("artists/<int:pk>/follow/", ArtistFollowToggleView.as_view(), name="artist-follow"),
     path("artists/me/", MyArtistProfileView.as_view(), name="artist-profile-me"),
+    path("artists/me/studio/", MyArtistStudioPhotoListCreateView.as_view(), name="artist-studio-photos"),
+    path("artists/me/studio/<int:pk>/", MyArtistStudioPhotoDeleteView.as_view(), name="artist-studio-photo-delete"),
     path("artists/<int:artist_id>/products/", ArtistProductsListView.as_view(), name="artist-products"),
     path("customers/<int:pk>/", CustomerProfileView.as_view(), name="customer-profile"),
     path("products/<int:pk>/", ProductDetailView.as_view(), name="product-detail"),
@@ -89,8 +92,6 @@ urlpatterns = [
     path("admin/flagged-copies/<int:pk>/overrule/", OverruleCopyView.as_view(), name="admin-flagged-overrule"),
     path("admin/evidence-review/", EvidenceReviewListView.as_view(), name="admin-evidence-review"),
     path("admin/evidence-review/<int:pk>/decision/", EvidenceReviewDecisionView.as_view(), name="admin-evidence-review-decision"),
-    path("assistant/chat/", AssistantChatView.as_view(), name="assistant-chat"),
-    path("assistant/image-rank/", SanaaImageRankView.as_view(), name="assistant-image-rank"),
     path("conversations/<int:pk>/resume/", ResumeCancelledConversationView.as_view(), name="conversation-resume"),
     path("products/<int:product_id>/like/", ToggleProductLikeView.as_view(), name="product-like-toggle"),
     

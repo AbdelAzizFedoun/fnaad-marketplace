@@ -184,11 +184,6 @@ export const restoreSession = async (): Promise<boolean> => {
 
 export const getMe = () => api.get("/accounts/me/");
 
-export type AssistantChatHistory = { role: "user" | "assistant"; content: string }[];
-
-export const assistantChat = (message: string, history: AssistantChatHistory) =>
-  api.post("/catalog/assistant/chat/", { message, history });
-
 export const getProductDetail = (id: number) => api.get(`/catalog/products/${id}/`);
 
 export const createProduct = (data: {
@@ -493,6 +488,31 @@ export const getArtistProducts = (artistId: number) =>
   api.get(`/catalog/artists/${artistId}/products/`);
 export const getArtistFollowStatus = (artistId: number) => api.get(`/catalog/artists/${artistId}/follow/`);
 export const toggleArtistFollow = (artistId: number) => api.post(`/catalog/artists/${artistId}/follow/`);
+export const getFollowerProfile = (userId: number) => api.get(`/accounts/followers/${userId}/profile/`);
+export const getMyStudioPhotos = () => api.get("/catalog/artists/me/studio/");
+export const uploadStudioMedia = (media: {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  file?: File | null;
+  type: "image" | "video";
+}, caption: string) => {
+  const formData = new FormData();
+  formData.append(
+    media.type,
+    Platform.OS === "web" && media.file
+      ? media.file
+      : ({
+          uri: media.uri,
+          name: media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg"),
+          type: media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg"),
+        } as any),
+  );
+  formData.append("caption", caption);
+  return api.post("/catalog/artists/me/studio/", formData);
+};
+export const deleteStudioPhoto = (photoId: number) =>
+  api.delete(`/catalog/artists/me/studio/${photoId}/`);
 
 export const getMyArtistProfile = () => api.get("/catalog/artists/me/");
 
@@ -611,17 +631,6 @@ export const getReviewableConversations = () =>
 
 export const getMyArtistAnalytics = () => api.get("/catalog/artists/me/analytics/");
 
-export const sanaaImageRank = (imageUri: string, message?: string) => {
-  const formData = new FormData();
-  formData.append("image", {
-    uri: imageUri,
-    name: "sanaa-reference.jpg",
-    type: "image/jpeg",
-  } as any);
-  if (message) formData.append("message", message);
-  return api.post("/catalog/assistant/image-rank/", formData);
-};
-
 export const resumeConversation = (conversationId: number) =>
   api.patch(`/catalog/conversations/${conversationId}/resume/`);
 
@@ -658,20 +667,17 @@ export const getMySubscription = () => api.get("/billing/me/");
 
 export const getSubscriptionPlans = () => api.get("/billing/plans/");
 
-export const startSubscriptionPayment = (planId: number, phoneNumber?: string, method?: "orange" | "mtn") =>
-  api.post("/billing/fapshi/start/", {
+export const startSubscriptionPayment = (planId: number, phoneNumber?: string) =>
+  api.post("/billing/campay/start/", {
     plan_id: planId,
     ...(phoneNumber ? { phone_number: phoneNumber } : {}),
-    ...(method ? { method } : {}),
   });
-export const startRegistrationFeePayment = (phoneNumber?: string, method?: "orange" | "mtn") =>
-  api.post("/billing/fapshi/registration-fee/start/", { phone_number: phoneNumber, method });
 
 export const confirmSubscriptionPayment = (externalReference: string) =>
-  api.post("/billing/fapshi/confirm/", { external_reference: externalReference });
+  api.post("/billing/campay/confirm/", { external_reference: externalReference });
 
 export const getSubscriptionPaymentStatus = (externalReference: string) =>
-  api.get(`/billing/fapshi/payments/${externalReference}/`);
+  api.get(`/billing/campay/payments/${externalReference}/`);
 
 export const requestPasswordReset = (email: string) =>
   api.post("/accounts/request-password-reset/", { email });

@@ -50,8 +50,16 @@ class Subscription(models.Model):
 
 
 class SubscriptionPayment(models.Model):
-    """A Fapshi collection request for an artist's subscription."""
+    """A mobile money collection request for an artist's subscription."""
+    PROVIDER_FAPSHI = "fapshi"
+    PROVIDER_CAMPAY = "campay"
+    PROVIDER_CHOICES = [
+        (PROVIDER_FAPSHI, "Fapshi"),
+        (PROVIDER_CAMPAY, "CamPay"),
+    ]
+
     subscription = models.ForeignKey(Subscription, on_delete=models.PROTECT, related_name="payments")
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default=PROVIDER_FAPSHI)
     external_reference = models.CharField(max_length=100, unique=True)
     provider_transaction_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     phone_number = models.CharField(max_length=20)

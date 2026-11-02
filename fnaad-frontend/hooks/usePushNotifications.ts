@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Device from "expo-device";
 import Constants, { ExecutionEnvironment } from "expo-constants";
+import { useRouter } from "expo-router";
 import { Platform } from "react-native";
 import { registerPushToken } from "../services/api";
 
@@ -26,6 +27,7 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 }
 
 export function usePushNotifications(isLoggedIn: boolean) {
+  const router = useRouter();
   const notificationListener = useRef<any>(undefined);
   const responseListener = useRef<any>(undefined);
 
@@ -61,7 +63,17 @@ export function usePushNotifications(isLoggedIn: boolean) {
         });
 
         responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-          console.log("Notification tapped:", response.notification.request.content.data);
+          const data = response.notification.request.content.data;
+          console.log("Notification tapped:", data);
+          if (data) {
+            const followerId = Number(data.follower_id);
+            if (data.type === "artist_follow" && Number.isInteger(followerId) && followerId > 0) {
+              router.push({
+                pathname: "/follower/[id]",
+                params: { id: String(followerId) },
+              });
+            }
+          }
         });
       } catch (err) {
         console.log("Notification setup error:", err);
@@ -77,7 +89,7 @@ export function usePushNotifications(isLoggedIn: boolean) {
         responseListener.current.remove();
       }
     };
-  }, [isLoggedIn]);
+  }, [isLoggedIn, router]);
 }
 
 async function registerForPushNotificationsAsync(Notifications: NotificationsModule): Promise<string | null> {

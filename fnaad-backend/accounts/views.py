@@ -4,7 +4,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer
 from .serializers import ChangePasswordSerializer, UpdateProfileSerializer
 from .models import User, ArtistProfile, PasswordResetCode
-from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer, ChangePasswordSerializer, UpdateProfileSerializer, RequestPasswordResetSerializer, ConfirmPasswordResetSerializer, NotificationSerializer
+from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer, ChangePasswordSerializer, UpdateProfileSerializer, RequestPasswordResetSerializer, ConfirmPasswordResetSerializer, NotificationSerializer, PublicUserProfileSerializer
 import logging
 
 from django.core.mail import send_mail
@@ -28,6 +28,25 @@ class MeView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class FollowerProfileView(generics.RetrieveAPIView):
+    serializer_class = PublicUserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        follower_id = self.kwargs["pk"]
+        if not self.request.user.notifications.filter(
+            notification_type="artist_follow",
+            data__follower_id=follower_id,
+        ).exists():
+            from django.http import Http404
+
+            raise Http404("Follower not found.")
+        return get_object_or_404(
+            User.objects.select_related("artist_profile"),
+            pk=follower_id,
+        )
 
 
 class RegisterPushTokenView(generics.GenericAPIView):

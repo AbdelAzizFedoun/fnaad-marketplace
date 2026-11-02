@@ -87,6 +87,19 @@ class MeSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "email", "phone_number", "profile_photo", "role", "is_staff", "is_artist", "date_joined_platform"]
 
+
+class PublicUserProfileSerializer(serializers.ModelSerializer):
+    artist_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "profile_photo", "role", "artist_name"]
+
+    def get_artist_name(self, obj):
+        artist_profile = getattr(obj, "artist_profile", None)
+        return artist_profile.brand_name if artist_profile else None
+
+
 class PushTokenSerializer(serializers.Serializer):
     expo_push_token = serializers.CharField(max_length=255)
 

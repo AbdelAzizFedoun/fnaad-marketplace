@@ -314,7 +314,13 @@ export default function GalleryScreen() {
             </Pressable>
           )}
 
-          <Text style={styles.brandName}>FNAAD Art</Text>
+          <View style={styles.brandLockup} accessibilityLabel="FNAAD Art Marketplace">
+            <NativeImage source={require("../../assets/logo-icon.png")} style={styles.brandLogo} resizeMode="contain" />
+            <View style={styles.brandCopy}>
+              <Text style={styles.brandName}>FNAAD</Text>
+              <Text style={styles.brandSubtitle}>ART MARKETPLACE</Text>
+            </View>
+          </View>
 
           <View style={styles.headerActions}>
             {!loggedIn && (
@@ -356,28 +362,23 @@ export default function GalleryScreen() {
           </Pressable>
         </View>
 
-        {/* ── AI & Discovery Navigation ── */}
-        <View style={styles.sanaaRow}>
-          <Pressable
-            style={styles.aiButton}
-            onPress={() => router.push("/assistant")}
-          >
-            <Ionicons name="sparkles-outline" size={15} color={colors.accent} style={{ marginRight: 5 }} />
-            <Text style={styles.aiButtonText}>{t("askSanaa")}</Text>
-          </Pressable>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickNavScroll}>
-            {[
-              { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
-              { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
-              { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
-              { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
-            ].map((item) => (
-              <Pressable key={item.label} onPress={item.onPress} style={styles.quickNavItem}>
-                <Text style={styles.quickNavText}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.quickNavRail}
+          contentContainerStyle={styles.quickNavScroll}
+        >
+          {[
+            { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
+            { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
+            { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
+            { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
+          ].map((item) => (
+            <Pressable key={item.label} onPress={item.onPress} style={styles.quickNavItem}>
+              <Text style={styles.quickNavText}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
         <View style={styles.galleryStatus}>
           <View style={styles.galleryStatusDot} />
           <Text style={styles.galleryStatusText}>Today at FNAAD · {spotlight.length || 0} artists in the 24h Spotlight</Text>
@@ -684,7 +685,11 @@ function createStyles(
       paddingHorizontal: layout.horizontalPadding,
     },
     headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingVertical: 4 },
-    brandName: { color: colors.text, fontSize: 18, fontWeight: "800", letterSpacing: 0.3, flex: 1, textAlign: "center" },
+    brandLockup: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+    brandLogo: { width: 30, height: 30 },
+    brandCopy: { alignItems: "flex-start" },
+    brandName: { color: colors.text, fontFamily: fonts.display, fontSize: 17, fontWeight: "800", letterSpacing: 2 },
+    brandSubtitle: { color: colors.accent, fontSize: 7, fontWeight: "800", letterSpacing: 1.2, marginTop: 1 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
     becomeArtistText: { color: colors.accent, fontSize: 12, fontWeight: "700" },
     navLoginBtn: {
@@ -775,10 +780,10 @@ function createStyles(
       fontSize: 13,
       fontWeight: "800",
     },
-    sanaaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
-    quickNavScroll: { alignItems: "center", gap: 4 },
-    quickNavItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-    quickNavText: { color: colors.text, fontSize: 11, fontWeight: "700" },
+    quickNavRail: { flexGrow: 0, marginTop: 12 },
+    quickNavScroll: { flexDirection: "row", alignItems: "center", columnGap: 8, paddingRight: 12 },
+    quickNavItem: { alignSelf: "flex-start", paddingVertical: 7, paddingHorizontal: 12, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+    quickNavText: { color: colors.text, fontSize: 12, fontWeight: "700" },
     galleryStatus: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10, marginBottom: 2 },
     galleryStatusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#5FA779" },
     galleryStatusText: { color: colors.textMuted, fontSize: 11, fontWeight: "600" },
@@ -858,12 +863,6 @@ function createStyles(
     ratingCount: { color: colors.textMuted, fontSize: 11 },
     clearSearchAction: { marginTop: 16, borderWidth: 1, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 20 },
     clearSearchActionText: { color: colors.text, fontSize: 13, fontWeight: "700" },
-    aiButton: { borderWidth: 1.5, borderColor: colors.accent, borderRadius: RADIUS.pill, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center" },
-    aiButtonText: {
-      color: colors.accent,
-      fontWeight: "700",
-      fontSize: 13,
-    },
     card: {
       width: cardWidth,
       backgroundColor: colors.surface,

@@ -59,12 +59,10 @@ ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv(
         "ALLOWED_HOSTS",
-        "*"
+        "*" if DEBUG else "localhost,127.0.0.1"
     ).split(",")
     if host.strip()
 ]
-if "*" not in ALLOWED_HOSTS and ".onrender.com" not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(".onrender.com")
 
 
 # Application definition
@@ -220,15 +218,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
-    # Sanaa is reachable without an account, and every message costs a paid model
-    # call, so the two assistant scopes are rate limited. Without this an
-    # anonymous caller can drain the AI budget from a single IP.
     # The auth scopes slow down password brute force and account creation
     # on the anonymous endpoints. They are keyed per IP for anonymous
     # callers, so a shared cache (Redis) is needed for multi-worker deploys.
     'DEFAULT_THROTTLE_RATES': {
-        'sanaa': os.getenv('SANAA_THROTTLE_RATE', '20/min'),
-        'sanaa_image': os.getenv('SANAA_IMAGE_THROTTLE_RATE', '6/min'),
         'login': os.getenv('LOGIN_THROTTLE_RATE', '10/min'),
         'register': os.getenv('REGISTER_THROTTLE_RATE', '5/hour'),
         'password_reset': os.getenv('PASSWORD_RESET_THROTTLE_RATE', '5/hour'),
@@ -236,8 +229,7 @@ REST_FRAMEWORK = {
     },
 }
 
-# Hard ceiling on request bodies. The Sanaa image endpoint enforces its own,
-# smaller cap on top of this.
+# Hard ceiling on request bodies.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
 
@@ -258,28 +250,46 @@ AUTH_USER_MODEL = 'accounts.User'
 # CORS — allows Web Admin panel and React Native / Expo to call this API.
 CORS_ALLOW_ALL_ORIGINS = os.getenv(
     "CORS_ALLOW_ALL_ORIGINS",
-    "true",
+    str(DEBUG),
 ).lower() in {"1", "true", "yes"}
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
-for _origin in [
-    "http://10.0.251.236:5173",
-    "http://10.0.251.236:8000",
-    "http://localhost:5173",
-    "http://localhost:8000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8000",
-]:
-    if _origin not in CORS_ALLOWED_ORIGINS:
-        CORS_ALLOWED_ORIGINS.append(_origin)
+if DEBUG:
+    _local_ip = os.getenv("SITE_BASE_URL", "").replace("http://", "").split(":")[0]
+    for _origin in [
+        "http://10.0.251.236:5173",
+        "http://10.0.251.236:8000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+    "http://localhost:8081",
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "http://localhost:19000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+    "http://127.0.0.1:8081",
+        "http://127.0.0.1:8081",
+        "http://127.0.0.1:19006",
+        "http://127.0.0.1:19000",
+        *(
+            [f"http://{_local_ip}:8081", f"http://{_local_ip}:19006", f"http://{_local_ip}:19000"]
+            if _local_ip and _local_ip not in ("localhost", "127.0.0.1") else []
+        ),
+    ]:
+        if _origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(_origin)
 
 # Tell Django the request is HTTPS when behind a reverse proxy (ngrok / Render).
 # Without this, build_absolute_uri() produces http:// links that browsers
 # block as mixed content.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "false").lower() in {"1", "true", "yes"}
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
@@ -297,8 +307,10 @@ for _csrf in [
     "http://10.0.251.143:8000",
     "http://localhost:5173",
     "http://localhost:8000",
+    "http://localhost:8081",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:8081",
 ]:
     if _csrf not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_csrf)
@@ -328,6 +340,16 @@ SITE_BASE_URL = os.getenv("SITE_BASE_URL", "http://localhost:8000")
 # Fapshi credentials stay on the server; never copy them into the Expo app.
 # They are read from the environment only — they were once hardcoded
 # here as fallbacks, which put live payment credentials into source.
+
+# New subscription collections use CamPay. Fapshi credentials are retained
+# only to reconcile transactions initiated before the provider migration.
+CAMPAY_BASE_URL = os.getenv(
+    "CAMPAY_BASE_URL",
+    "https://demo.campay.net/api" if DEBUG else "",
+)
+CAMPAY_USERNAME = os.getenv("CAMPAY_USERNAME", "")
+CAMPAY_PASSWORD = os.getenv("CAMPAY_PASSWORD", "")
+CAMPAY_WEBHOOK_KEY = os.getenv("CAMPAY_WEBHOOK_KEY", "")
 FAPSHI_BASE_URL = os.getenv("FAPSHI_BASE_URL", "https://sandbox.fapshi.com")
 FAPSHI_APIUSER = os.environ.get("FAPSHI_APIUSER", "")
 FAPSHI_APIKEY = os.environ.get("FAPSHI_APIKEY", "")
@@ -357,16 +379,3 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "webmaster@localhost")
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15"))
-
-# AI provider keys are read from the environment only. They used to have real
-# keys hardcoded here as fallbacks, which leaked a live Anthropic and Gemini key
-# into version control. If these are unset, Sanaa answers from its offline set
-# and logs a warning instead of silently pretending the AI is working.
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-
-# Sanaa's model. Gemini is preferred; Anthropic is the fallback provider.
-# gemini-2.5-flash now answers 404 for this project, so the default was moved to
-# gemini-3.8-flash. Override either without a code change.
-SANAA_GEMINI_MODEL = os.getenv("SANAA_GEMINI_MODEL", "gemini-3.8-flash")
-SANAA_ANTHROPIC_MODEL = os.getenv("SANAA_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")

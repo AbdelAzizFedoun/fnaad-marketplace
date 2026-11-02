@@ -13,7 +13,7 @@ type AppNotification = {
   title: string;
   body: string;
   notification_type: string;
-  data: { product_id?: number; commission_id?: number; conversation_id?: number; [key: string]: any };
+  data: { product_id?: number; commission_id?: number; conversation_id?: number; follower_id?: number; [key: string]: any };
   is_read: boolean;
   created_at: string;
 };
@@ -58,6 +58,7 @@ export default function NotificationsScreen() {
     copyright_report: "shield-checkmark-outline",
     copyright_report_admin: "flag-outline",
     artist_new_product: "color-palette-outline",
+    artist_follow: "person-add-outline",
   };
 
   const unreadCount = useMemo(() => notifications.filter((notification) => !notification.is_read).length, [notifications]);
@@ -65,7 +66,7 @@ export default function NotificationsScreen() {
   const getCategory = (notification: AppNotification): NotificationFilter => {
     if (notification.notification_type === "commission_response") return "commissions";
     if (["order", "payment", "delivery", "product_status", "artist_new_product"].includes(notification.notification_type)) return "orders";
-    if (["comment", "review", "favorite"].includes(notification.notification_type)) return "social";
+    if (["comment", "review", "favorite", "artist_follow"].includes(notification.notification_type)) return "social";
     if (["copy_review", "copyright_report", "copyright_report_admin"].includes(notification.notification_type)) return "copyright";
     return "all";
   };
@@ -187,6 +188,11 @@ export default function NotificationsScreen() {
           id: String(notification.data.product_id),
           openComments: "1",
         },
+      });
+    } else if (notification.notification_type === "artist_follow" && notification.data.follower_id) {
+      router.push({
+        pathname: "/follower/[id]",
+        params: { id: String(notification.data.follower_id) },
       });
     } else if (notification.notification_type === "commission_response" && notification.data.commission_id) {
       router.push("/my-commissions");

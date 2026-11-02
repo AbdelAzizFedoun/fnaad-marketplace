@@ -507,7 +507,36 @@ class CommissionRequestSerializer(serializers.ModelSerializer):
 
 
 
-from accounts.models import ArtistProfile, User, ArtistStudioPhoto
+from accounts.models import ArtistProfile, ArtistStudioPhoto, User
+
+
+class ArtistStudioPhotoSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(required=False, allow_null=True)
+    video = serializers.FileField(required=False, allow_null=True)
+    duration_seconds = serializers.IntegerField(read_only=True, allow_null=True)
+    media_type = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ArtistStudioPhoto
+        fields = ["id", "image", "video", "media_type", "duration_seconds", "caption", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs):
+        image = attrs.get("image")
+        video = attrs.get("video")
+        if bool(image) == bool(video):
+            raise serializers.ValidationError("Upload either one image or one video.")
+
+        if video:
+            if video.size > 100 * 1024 * 1024:
+                raise serializers.ValidationError({"video": "Videos must be 100 MB or smaller."})
+            if video.name.rsplit(".", 1)[-1].lower() not in {"mp4", "mov", "m4v", "webm"}:
+                raise serializers.ValidationError({"video": "Use an MP4, MOV, M4V, or WebM video."})
+
+        return attrs
+
+    def get_media_type(self, obj):
+        return "video" if obj.video else "image"
 
 
 class ArtistPublicSerializer(serializers.ModelSerializer):
@@ -533,19 +562,19 @@ class ArtistPublicSerializer(serializers.ModelSerializer):
         return obj.followers.count()
 
     def get_studio_photos(self, obj):
-        request = self.context.get("request")
-        return [{"id": photo.id, "image": request.build_absolute_uri(photo.image.url) if request else photo.image.url, "caption": photo.caption} for photo in obj.studio_photos.all()]
+        return ArtistStudioPhotoSerializer(
+            obj.studio_photos.all(),
+            many=True,
+            context=self.context,
+        ).data
 
 
 class ArtistPrivateSerializer(serializers.ModelSerializer):
     region_display = serializers.CharField(source="get_region_display", read_only=True)
     gender_display = serializers.CharField(source="get_gender_display", read_only=True)
 
-    # An artist editing their own profile must not be able to move their region,
-    # change their gender, or grant themselves the verified badge. `is_verified`
-    # feeds Sanaa's ranking score, so a self-awarded badge would be a paid
-    # placement the artist bought for free. These are decided by the FNAAD team
-    # through the admin endpoints.
+    # An artist editing their own profile must not be able to change these
+    # staff-managed fields.
     region = serializers.CharField(read_only=True)
     gender = serializers.CharField(read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
@@ -672,27 +701,3 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         model = get_user_model()
 
         fields = ["id", "username", "email", "phone_number", "profile_photo", "role", "date_joined_platform"]
-
-
-class SanaaArtistRecommendationSerializer(serializers.Serializer):
-    """Artist recommendation payload returned by the Sanaa image-rank endpoint."""
-
-    id = serializers.IntegerField()
-    brand_name = serializers.CharField()
-    artistic_practice = serializers.CharField(allow_null=True)
-    region_display = serializers.CharField()
-    is_verified = serializers.BooleanField()
-    average_rating = serializers.FloatField(allow_null=True)
-    review_count = serializers.IntegerField()
-    like_count = serializers.IntegerField()
-    matching_work_count = serializers.IntegerField()
-    recommendation_score = serializers.FloatField()
-    avatar = serializers.SerializerMethodField()
-
-    def get_avatar(self, obj):
-        request = self.context.get("request")
-        if not obj.avatar:
-            return None
-        return request.build_absolute_uri(obj.avatar.url) if request else obj.avatar.url
-
-   

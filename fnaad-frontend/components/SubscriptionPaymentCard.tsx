@@ -12,28 +12,18 @@ type Plan = {
   price_xaf: number;
 };
 
-type PaymentMethod = "orange" | "mtn";
-
 type Step = "plan" | "method" | "pending";
-
-const PLANS: Plan[] = [
-  { id: 1, duration_months: 1, price_xaf: 10 },
-  { id: 2, duration_months: 2, price_xaf: 17 },
-  { id: 3, duration_months: 3, price_xaf: 25 },
-];
 
 export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () => void }) {
   const { t } = useLanguage();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const styles = createStyles(colors, width);
-  const isWide = width >= 640;
 
   const [step, setStep] = useState<Step>("plan");
-  const [selectedPlan, setSelectedPlan] = useState<Plan>(PLANS[1]);
-  const [plans, setPlans] = useState<Plan[]>(PLANS);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [externalReference, setExternalReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,11 +38,11 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
     getSubscriptionPlans()
       .then((res) => {
         const loadedPlans = res.data?.plans as Plan[] | undefined;
-        if (loadedPlans?.length) {
-          setPlans(loadedPlans);
-          const chosen = loadedPlans.find((plan) => plan.id === selectedPlan.id) || loadedPlans[Math.min(1, loadedPlans.length - 1)];
-          setSelectedPlan(chosen);
+        if (!loadedPlans?.length) {
+          throw new Error("No subscription plans were returned.");
         }
+        setPlans(loadedPlans);
+        setSelectedPlan(loadedPlans[0]);
       })
       .catch((err) => console.log("Subscription plans load error:", err.message))
       .finally(() => setPlansLoading(false));
@@ -90,18 +80,13 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
     animateTransition(() => setStep("method"));
   };
 
-  const handleChooseMethod = (method: PaymentMethod) => {
-    setSelectedMethod(method);
-    setError(null);
-  };
-
   const handleBackToPlan = () => {
     animateTransition(() => setStep("plan"));
   };
 
   const handleSubmitPayment = async () => {
-    if (!selectedMethod) {
-      setError(t("subscriptionSelectMethodError"));
+    if (!selectedPlan) {
+      setError(t("subscriptionPaymentError"));
       return;
     }
     if (!phoneNumber || phoneNumber.length < 9) {
@@ -118,7 +103,6 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
       const res = await startSubscriptionPayment(
         selectedPlan.id,
         phoneNumber,
-        selectedMethod,
       );
       const extRef = res.data.external_reference as string;
       setExternalReference(extRef);
@@ -183,8 +167,10 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
               Choose your plan duration.
             </Text>
             <View style={styles.plansColumn}>
-              {plansLoading ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 22 }} /> : plans.map((plan) => {
-                const isSelected = selectedPlan.id === plan.id;
+              {plansLoading ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 22 }} /> : plans.length === 0 ? (
+                <Text style={styles.subtitle}>Subscription plans are unavailable. Please try again later.</Text>
+              ) : plans.map((plan) => {
+                const isSelected = selectedPlan?.id === plan.id;
                 const isPopular = plan.duration_months === 2;
                 return (
                   <TouchableOpacity
@@ -226,88 +212,50 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
               <Text style={styles.backButtonText}>{t("subscriptionBack")}</Text>
             </TouchableOpacity>
             <Text style={styles.title}>{t("subscriptionPayWith")}</Text>
-            <Text style={styles.subtitle}>Select your payment method</Text>
+            <Text style={styles.subtitle}>
+              Enter an MTN or Orange Money number. CamPay routes the request to that network.
+            </Text>
 
-            <View style={[styles.methodsRow, isWide && styles.methodsRowWide]}>
-              {(["orange", "mtn"] as PaymentMethod[]).map((method) => {
-                const isSelected = selectedMethod === method;
-                const isOrange = method === "orange";
-                return (
-                  <TouchableOpacity
-                    key={method}
-                    style={[
-                      styles.methodOption,
-                      isSelected && styles.methodOptionSelected,
-                      isSelected && isOrange && styles.methodOptionOrange,
-                      isSelected && !isOrange && styles.methodOptionMtn,
-                    ]}
-                    onPress={() => handleChooseMethod(method)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.methodIconContainer}>
-                      <View
-                        style={[
-                          styles.methodDot,
-                          isOrange ? styles.methodDotOrange : styles.methodDotMtn,
-                          isSelected && styles.methodDotSelected,
-                        ]}
-                      />
-                      <Text style={[styles.methodLabel, isSelected && styles.methodLabelSelected]}>
-                        {isOrange ? "Orange Money" : "MTN MoMo"}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <View style={styles.methodCheck}>
-                        <Text style={styles.methodCheckText}>{'\u2713'}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {selectedMethod && (
-              <View style={styles.formSection}>
-                <Text style={styles.inputLabel}>{t("subscriptionPhoneNumber")}</Text>
-                <View style={[styles.phoneInputRow, error && styles.phoneInputRowError]}>
-                  <View style={styles.phonePrefixContainer}>
-                    <Text style={styles.phonePrefix}>+237</Text>
-                  </View>
-                  <TextInput
-                    style={styles.phoneInput}
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    keyboardType="phone-pad"
-                    placeholder="6XX XXX XXX"
-                    placeholderTextColor={colors.textMuted}
-                    maxLength={9}
-                    autoFocus
-                  />
+            <View style={styles.formSection}>
+              <Text style={styles.inputLabel}>{t("subscriptionPhoneNumber")}</Text>
+              <View style={[styles.phoneInputRow, error && styles.phoneInputRowError]}>
+                <View style={styles.phonePrefixContainer}>
+                  <Text style={styles.phonePrefix}>+237</Text>
                 </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  keyboardType="phone-pad"
+                  placeholder="6XX XXX XXX"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={9}
+                  autoFocus
+                />
+              </View>
 
-                {error && (
-                  <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error}</Text>
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handleSubmitPayment}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.background} />
+                ) : (
+                  <View style={styles.submitButtonContent}>
+                    <Text style={styles.submitButtonText}>{t("subscriptionSendPayment")}</Text>
+                    <Text style={styles.submitButtonPrice}>· {formatPrice(selectedPlan?.price_xaf ?? 0)} XAF</Text>
                   </View>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                  onPress={handleSubmitPayment}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.background} />
-                  ) : (
-                    <View style={styles.submitButtonContent}>
-                      <Text style={styles.submitButtonText}>{t("subscriptionSendPayment")}</Text>
-                      <Text style={styles.submitButtonPrice}>· {formatPrice(selectedPlan.price_xaf)} XAF</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -475,93 +423,6 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], width: numb
       fontWeight: "800",
       fontSize: isCompact ? 15 : 17,
     },
-    methodsRow: {
-      flexDirection: "row",
-      gap: 10,
-      marginBottom: 20,
-    },
-    methodsRowWide: { maxWidth: 440, alignSelf: "center", width: "100%" },
-    methodOption: {
-      flex: 1,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      borderRadius: 12,
-      paddingVertical: 16,
-      paddingHorizontal: isCompact ? 8 : 12,
-      alignItems: "center",
-      backgroundColor: colors.background,
-      position: "relative",
-    },
-    methodOptionSelected: {
-      borderWidth: 2,
-    },
-    methodOptionOrange: {
-      borderColor: "#FF6600",
-      backgroundColor: "#FF660008",
-    },
-    methodOptionMtn: {
-      borderColor: "#FFCC00",
-      backgroundColor: "#FFCC0006",
-    },
-    methodIconContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    methodDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-    },
-    methodDotOrange: {
-      backgroundColor: "#FF6600",
-    },
-    methodDotMtn: {
-      backgroundColor: "#FFCC00",
-    },
-    methodDotSelected: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
-      elevation: 2,
-    },
-    methodLabel: {
-      color: colors.textMuted,
-      fontSize: isCompact ? 12 : 14,
-      flexShrink: 1,
-      textAlign: "center",
-      fontWeight: "600",
-    },
-    methodLabelSelected: {
-      color: colors.text,
-      fontWeight: "700",
-    },
-    methodCheck: {
-      position: "absolute",
-      top: 8,
-      right: 8,
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: colors.accent,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: colors.accent,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 3,
-      elevation: 3,
-    },
-    methodCheckText: {
-      color: colors.background,
-      fontSize: 11,
-      fontWeight: "700",
-    },
-
     formSection: {
       marginTop: 4,
     },

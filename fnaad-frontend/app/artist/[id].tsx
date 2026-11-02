@@ -11,6 +11,7 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
 import { shadow, RADIUS } from "../../components/shadow";
 import React from "react";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 type ArtistProfile = {
   id: number;
@@ -23,7 +24,14 @@ type ArtistProfile = {
   follower_count: number;
   is_artist_of_week?: boolean;
   artist_of_week_note?: string;
-  studio_photos?: { id: number; image: string; caption?: string }[];
+  studio_photos?: {
+    id: number;
+    image: string | null;
+    video?: string | null;
+    media_type?: "image" | "video";
+    duration_seconds?: number | null;
+    caption?: string;
+  }[];
 };
 
 type Product = {
@@ -33,6 +41,11 @@ type Product = {
   images: { image: string; is_primary: boolean }[];
 };
 type ProfileTab = "works" | "studio" | "about";
+
+function StudioVideo({ uri, style }: { uri: string; style: object }) {
+  const player = useVideoPlayer(uri);
+  return <VideoView player={player} style={style} nativeControls contentFit="cover" />;
+}
 
 export default function ArtistProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -137,7 +150,7 @@ export default function ArtistProfileScreen() {
 
         <View style={styles.tabBar}>{(["works", "studio", "about"] as ProfileTab[]).map((tab) => <Pressable key={tab} onPress={() => setActiveTab(tab)} style={[styles.tab, activeTab === tab && styles.activeTab]}><Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab === "works" ? t("worksTab") : tab === "studio" ? t("studioTab") : t("aboutTab")}</Text></Pressable>)}</View>
 
-        {activeTab === "studio" && <View style={styles.studioSection}>{artist.studio_photos?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.studioRow}>{artist.studio_photos.map((photo) => <View key={photo.id} style={styles.studioCard}><Image source={{ uri: resolveMediaUrl(photo.image)! }} style={styles.studioImage} resizeMode="cover" />{photo.caption ? <Text style={styles.studioCaption}>{photo.caption}</Text> : null}</View>)}</ScrollView> : <Text style={styles.empty}>{t("noStudioContent")}</Text>}</View>}
+        {activeTab === "studio" && <View style={styles.studioSection}>{artist.studio_photos?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.studioRow}>{artist.studio_photos.map((media) => <View key={media.id} style={styles.studioCard}>{media.media_type === "video" && media.video ? <StudioVideo uri={resolveMediaUrl(media.video)!} style={styles.studioImage} /> : media.image ? <Image source={{ uri: resolveMediaUrl(media.image)! }} style={styles.studioImage} resizeMode="cover" /> : null}{media.caption ? <Text style={styles.studioCaption}>{media.caption}</Text> : null}</View>)}</ScrollView> : <Text style={styles.empty}>{t("noStudioContent")}</Text>}</View>}
         {activeTab === "about" && <View style={styles.aboutCard}><Text style={styles.sectionTitle}>{t("aboutTab")} {artist.brand_name}</Text><Text style={styles.aboutText}>{artist.bio || t("noArtistBio")}</Text><Text style={styles.aboutMeta}>{artist.region_display} · {artist.follower_count} {t("followers")}</Text></View>}
 
         {activeTab === "works" && <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("moreFromArtist")} {artist.brand_name}</Text></View>}

@@ -4,40 +4,30 @@ from rest_framework.response import Response
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.parsers import MultiPartParser as MPParser, FormParser as FParser
 from rest_framework import serializers as drf_serializers
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.pagination import PageNumberPagination
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from rest_framework.exceptions import APIException, ValidationError
 import logging
-from pathlib import Path
-import os
-import uuid
 from datetime import timedelta
 from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature
 from social.models import Comment
 from social.models import Comment, Like
-from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer, SanaaArtistRecommendationSerializer
+from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer
 from .models import Product
 from django.db.models import Avg, Count
 from django.db.models.functions import Coalesce
 
 from billing.models import Subscription
-from .assistant import (
-    ALLOWED_IMAGE_TYPES,
-    MAX_UPLOAD_BYTES,
-    ask_sanaa,
-    get_my_products,
-    rank_artists_by_image,
-    resolve_catalogue,
-    should_load_catalogue,
-    wants_recommendations,
-)
-
 logger = logging.getLogger(__name__)
+
+
+class VideoProbeUnavailableApiException(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 class StandardResultsPagination(PageNumberPagination):
@@ -48,13 +38,14 @@ class StandardResultsPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
-from accounts.models import ArtistProfile, ArtistFollow
+from accounts.models import ArtistFollow, ArtistProfile, ArtistStudioPhoto
 from .models import Product, ProductImage, Conversation, Message
-from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, CreationEvidenceSerializer
+from .serializers import ArtistStudioPhotoSerializer, ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, CreationEvidenceSerializer
 from .image_utils import generate_product_thumbnail, compute_image_hashes
 from .duplication import find_potential_copy
 from accounts.push import send_push_notification, create_notification
 from .permissions import IsSuperAdmin
+from .studio_media import InvalidStudioVideo, VideoProbeUnavailable, probe_video_duration
 
 def product_public_view(request, slug):
     product = get_object_or_404(Product, public_slug=slug, status="approved", is_public_visible=True)
@@ -1090,6 +1081,67 @@ class MyArtistProfileView(generics.RetrieveUpdateAPIView):
             raise Http404("Profil artiste introuvable.")
         return artist_profile
 
+
+class MyArtistStudioPhotoListCreateView(generics.ListCreateAPIView):
+    serializer_class = ArtistStudioPhotoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        artist_profile = get_artist_profile_for_user(self.request.user)
+        if artist_profile is None:
+            raise PermissionDenied("Only artists can manage studio photos.")
+        return ArtistStudioPhoto.objects.filter(artist=artist_profile)
+
+    def perform_create(self, serializer):
+        artist_profile = get_artist_profile_for_user(self.request.user)
+        if artist_profile is None:
+            raise PermissionDenied("Only artists can manage studio photos.")
+        video = serializer.validated_data.get("video")
+        duration_seconds = None
+        if video:
+            try:
+                duration_seconds = probe_video_duration(video)
+            except InvalidStudioVideo as exc:
+                raise ValidationError({"video": str(exc)}) from exc
+            except VideoProbeUnavailable as exc:
+                raise VideoProbeUnavailableApiException(
+                    "Video validation is temporarily unavailable. Please try again later."
+                ) from exc
+
+            if duration_seconds > 180:
+                raise ValidationError({"video": "Videos must be 180 seconds or shorter."})
+
+        with transaction.atomic():
+            locked_artist = ArtistProfile.objects.select_for_update().get(pk=artist_profile.pk)
+            if video and locked_artist.studio_photos.filter(video__gt="").count() >= 3:
+                raise ValidationError({"video": "You can have up to three Studio videos."})
+            serializer.save(
+                artist=locked_artist,
+                duration_seconds=int(duration_seconds) if duration_seconds is not None else None,
+            )
+
+
+class MyArtistStudioPhotoDeleteView(generics.DestroyAPIView):
+    serializer_class = ArtistStudioPhotoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = ArtistStudioPhoto.objects.all()
+
+    def get_object(self):
+        photo = super().get_object()
+        artist_profile = get_artist_profile_for_user(self.request.user)
+        if artist_profile is None or photo.artist_id != artist_profile.id:
+            raise PermissionDenied("You cannot delete this studio photo.")
+        return photo
+
+    def perform_destroy(self, instance):
+        if instance.image:
+            instance.image.delete(save=False)
+        if instance.video:
+            instance.video.delete(save=False)
+        instance.delete()
+
+
 class CustomerProfileView(generics.RetrieveAPIView):
     """
     Artist-only: view a customer's profile - scoped so an artist can only
@@ -1562,127 +1614,6 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return SiteSettings.get_solo()
 
-class AssistantChatView(generics.GenericAPIView):
-    """
-    Chat with Sanaa, the AI assistant. Stateless — frontend sends full
-    conversation history each time.
-    Expects: {"message": "...", "history": [{"role": "user"/"assistant", "content": "..."}]}
-
-    The endpoint is reachable without an account so the landing page can be
-    tried, but it costs a paid model call per message, so it is rate limited.
-    """
-    permission_classes = []
-    authentication_classes = [JWTAuthentication]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "sanaa"
-
-    def post(self, request, *args, **kwargs):
-        message = (request.data.get("message") or "").strip()
-        history = request.data.get("history") or []
-
-        if not message:
-            return Response({"detail": "Message required."}, status=400)
-        if len(message) > 1000:
-            return Response({"detail": "Message too long (1000 characters maximum)."}, status=400)
-        if not isinstance(history, list) or len(history) > 20:
-            return Response({"detail": "Invalid history."}, status=400)
-
-        # Parse the constraints once and share them, so the artworks Sanaa shows
-        # and the artists she names always come from the same filter. An empty
-        # category is widened and announced; an empty budget never is.
-        if should_load_catalogue(message, history):
-            candidate_products, ranked_artists, widened_category = resolve_catalogue(message)
-        else:
-            # "hi" and "how does the app work" get no catalogue at all, so the
-            # model is neither billed for nor tempted by artworks nobody asked for.
-            candidate_products, ranked_artists, widened_category = [], [], None
-        should_recommend = wants_recommendations(message)
-
-        subscription_data = None
-        my_products = None
-        artist_profile = None
-        if request.user.is_authenticated:
-            try:
-                artist_profile = ArtistProfile.objects.get(user=request.user)
-                subscription = Subscription.objects.get(artist=artist_profile)
-                last_payment = (
-                    subscription.payments
-                    .filter(status__in=["SUCCESSFUL", "SUCCESS", "COMPLETED"])
-                    .first()
-                )
-                subscription_data = {
-                    "status": subscription.status,
-                    "status_display": subscription.get_status_display(),
-                    "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
-                    "trial_start_date": subscription.trial_start_date.isoformat() if subscription.trial_start_date else None,
-                    "trial_end_date": subscription.trial_end_date.isoformat() if subscription.trial_end_date else None,
-                    "monthly_price_xaf": subscription.monthly_price_xaf,
-                    "last_payment_id": subscription.last_payment_id or None,
-                    "last_payment_date": last_payment.created_at.isoformat() if last_payment else None,
-                    "last_payment_amount_xaf": last_payment.amount_xaf if last_payment else None,
-                    "is_active": subscription.is_active,
-                }
-            except (ArtistProfile.DoesNotExist, Subscription.DoesNotExist):
-                pass
-
-            if artist_profile is not None:
-                my_products = get_my_products(artist_profile)
-
-        try:
-            reply, product_ids, artist_ids, degraded = ask_sanaa(
-                message, history,
-                candidate_products=candidate_products,
-                candidate_artists=ranked_artists,
-                is_artist=bool(getattr(request.user, "is_artist", False)),
-                user_name=request.user.username if request.user.is_authenticated else "",
-                subscription_data=subscription_data,
-                my_products=my_products,
-                widened_category=widened_category,
-            )
-        except Exception:
-            # Never leak the provider's error text, key fragments or stack trace
-            # to the client; the operator gets the trace instead.
-            logger.exception("Sanaa chat failed for message %r", message[:80])
-            return Response(
-                {"detail": "The assistant is temporarily unavailable. Please try again in a moment."},
-                status=503,
-            )
-
-        product_by_id = {str(product.id): product for product in candidate_products}
-        recommended_products = [
-            product_by_id[pid] for pid in product_ids if pid in product_by_id
-        ]
-
-        valid_artist_ids = {str(artist.id) for artist in ranked_artists}
-        if not artist_ids and should_recommend:
-            # The model picked nobody. Falling back to the plain ranking is fine
-            # as long as we only do it for an actual shopping question, and as long
-            # as it stays limited to artists who have matching work available.
-            artist_ids = [str(artist.id) for artist in ranked_artists]
-        artist_by_id = {str(artist.id): artist for artist in ranked_artists}
-        recommended_artists = [artist_by_id[aid] for aid in artist_ids if aid in valid_artist_ids]
-
-        try:
-            recommended_products_data = ProductSerializer(
-                recommended_products, many=True, context={"request": request}
-            ).data
-            recommended_artists_data = ArtistPublicSerializer(recommended_artists, many=True).data
-        except Exception:
-            # A single malformed record must not cost the user their whole answer.
-            logger.exception("Sanaa recommendation serialisation failed")
-            return Response(
-                {"reply": reply, "recommended_products": [], "recommended_artists": [], "degraded": True},
-                status=200,
-            )
-
-        return Response({
-            "reply": reply,
-            "recommended_products": recommended_products_data,
-            "recommended_artists": recommended_artists_data,
-            "degraded": degraded,
-        })
-
-
 class ArtistProfileDetailView(generics.RetrieveAPIView):
     """
     Public artist profile — shows only public info.
@@ -1705,7 +1636,13 @@ class ArtistFollowToggleView(drf_views.APIView):
             following = False
         else:
             following = True
-            create_notification(artist.user, "New follower", f"{request.user.username} started following your artist profile.", "artist_follow", {"artist_id": artist.id})
+            create_notification(
+                artist.user,
+                "New follower",
+                f"{request.user.username} started following your artist profile.",
+                "artist_follow",
+                {"artist_id": artist.id, "follower_id": request.user.id},
+            )
         return Response({"following": following, "follower_count": artist.followers.count()})
 
     def get(self, request, pk):
@@ -1950,116 +1887,3 @@ class ResumeCancelledConversationView(generics.GenericAPIView):
         conversation.cancelled_at = None
         conversation.save(update_fields=["status", "cancelled_at"])
         return Response({"status": conversation.status, "resumed": True})
-
-
-class SanaaImageRankView(generics.GenericAPIView):
-    """
-    Sanaa analyses an uploaded reference drawing/photo and ranks the best-matching
-    artists. Gemini vision classifies the image into one of the real product
-    categories; that category becomes a database filter; the artists are then
-    ranked with the same score used for text queries.
-
-    POST /catalog/assistant/image-rank/  (multipart: image, message?)
-    """
-    permission_classes = []
-    authentication_classes = [JWTAuthentication]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "sanaa_image"
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, *args, **kwargs):
-        image = request.data.get("image")
-        message = (request.data.get("message") or "").strip()
-        if not image:
-            return Response({"detail": "Image is required."}, status=400)
-        if len(message) > 1000:
-            return Response({"detail": "Message too long (1000 characters maximum)."}, status=400)
-
-        # Trust the declared content type, but only among the three we accept.
-        # The extension comes from our own allowlist, never from the uploaded
-        # filename, so a crafted name cannot decide where anything is written.
-        content_type = (getattr(image, "content_type", "") or "").split(";")[0].strip().lower()
-        if content_type not in ALLOWED_IMAGE_TYPES:
-            return Response(
-                {"detail": "Unsupported format. Use JPG, PNG, or WEBP."},
-                status=400,
-            )
-
-        upload_dir = Path(settings.MEDIA_ROOT) / "sanaa_uploads"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        dest = upload_dir / f"{uuid.uuid4().hex}{ALLOWED_IMAGE_TYPES[content_type]}"
-
-        try:
-            size = self._write_upload(image, dest)
-        except ValueError as exc:
-            return Response({"detail": f"Image rejected: {exc}"}, status=400)
-        except OSError:
-            logger.exception("Sanaa image upload could not be written")
-            return Response({"detail": "Unreadable image."}, status=400)
-
-        try:
-            # The local path is handed to the model helper, never a URL built from
-            # the request's Host header: nothing here makes an outbound request to
-            # a host the caller controls.
-            ranked, category = rank_artists_by_image(
-                str(dest), message=message, content_type=content_type, limit=5
-            )
-        except Exception:
-            logger.exception("Sanaa image rank failed")
-            return Response(
-                {"detail": "The assistant could not analyze this image. Please try again."},
-                status=503,
-            )
-        finally:
-            # The upload is an input to one model call and nothing else; it never
-            # needs to be publicly served.
-            try:
-                dest.unlink(missing_ok=True)
-            except OSError:
-                logger.warning("Could not remove Sanaa upload %s", dest)
-
-        if not ranked:
-            return Response({
-                "artists": [],
-                "category": category,
-                "reply": "No available artist matches this image at the moment.",
-            })
-
-        payload = SanaaArtistRecommendationSerializer(
-            ranked, many=True, context={"request": request}
-        ).data
-        return Response({
-            "artists": payload,
-            "category": category,
-            "reply": (
-                "Here are the available artists working in this style."
-                if category
-                else "I couldn't classify this image, here are the top-rated artists."
-            ),
-        })
-
-    @staticmethod
-    def _write_upload(image, dest: Path) -> int:
-        """Stream the upload to disk, aborting as soon as it exceeds the cap."""
-        request_file = getattr(image, "file", None) or image
-        written = 0
-        with open(dest, "wb") as out:
-            if hasattr(request_file, "chunks"):
-                for chunk in request_file.chunks():
-                    written += len(chunk)
-                    if written > MAX_UPLOAD_BYTES:
-                        out.close()
-                        dest.unlink(missing_ok=True)
-                        raise ValueError(f"image trop lourde (max {MAX_UPLOAD_BYTES // (1024 * 1024)} Mo)")
-                    out.write(chunk)
-            else:
-                data = request_file.read() if hasattr(request_file, "read") else b""
-                written = len(data)
-                if written > MAX_UPLOAD_BYTES:
-                    raise ValueError(f"image trop lourde (max {MAX_UPLOAD_BYTES // (1024 * 1024)} Mo)")
-                out.write(data)
-
-        if written == 0:
-            dest.unlink(missing_ok=True)
-            raise ValueError("image vide")
-        return written

@@ -30,13 +30,12 @@ export default function RoleSelectScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.title}>{t("joinFnaadTitle") || "Join the FNAAD Community"}</Text>
+          <Text style={styles.title}>{t("joinFnaadTitle")}</Text>
           <Text style={styles.subtitle}>
-            {t("joinFnaadSubtitle") || "Select how you would like to experience our African art marketplace"}
+            {t("joinFnaadSubtitle")}
           </Text>
         </View>
 
-        {/* Option 1: Artist / Artisan */}
         <Pressable
           style={[styles.roleCard, selected === "artist" && styles.roleCardActive]}
           onPress={() => setSelected("artist")}
@@ -52,12 +51,7 @@ export default function RoleSelectScreen() {
               />
             </View>
             <View style={styles.cardTitleWrap}>
-              <View style={styles.badgeRow}>
-                <Text style={styles.cardTitle}>{t("artistRole")}</Text>
-                <View style={styles.creatorBadge}>
-                  <Text style={styles.creatorBadgeText}>CREATOR</Text>
-                </View>
-              </View>
+              <Text style={styles.cardTitle}>{t("artistRole")}</Text>
               <Text style={styles.cardSub}>{t("artistRoleDescription")}</Text>
             </View>
             <View style={[styles.radioCircle, selected === "artist" && styles.radioCircleActive]}>
@@ -69,25 +63,24 @@ export default function RoleSelectScreen() {
             <View style={styles.perkItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
               <Text style={styles.perkText}>
-                {t("artistPerk1") || "Create your verified personal art shop"}
+                {t("artistBenefitShop")}
               </Text>
             </View>
             <View style={styles.perkItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
               <Text style={styles.perkText}>
-                {t("artistPerk2") || "Direct client inquiries & Mobile Money payments"}
+                {t("artistBenefitShowcase")}
               </Text>
             </View>
             <View style={styles.perkItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
               <Text style={styles.perkText}>
-                {t("artistPerk3") || "Originality Passport & 24h Spotlight discovery"}
+                {t("artistBenefitConnect")}
               </Text>
             </View>
           </View>
         </Pressable>
 
-        {/* Option 2: Art Collector / Customer */}
         <Pressable
           style={[styles.roleCard, selected === "customer" && styles.roleCardActive]}
           onPress={() => setSelected("customer")}
@@ -97,7 +90,7 @@ export default function RoleSelectScreen() {
           <View style={styles.cardHeader}>
             <View style={[styles.iconWrap, selected === "customer" && styles.iconWrapActive]}>
               <Ionicons
-                name="sparkles-outline"
+                name="bag-handle-outline"
                 size={26}
                 color={selected === "customer" ? colors.accent : colors.textMuted}
               />
@@ -115,19 +108,18 @@ export default function RoleSelectScreen() {
             <View style={styles.perkItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
               <Text style={styles.perkText}>
-                {t("customerPerk1") || "Discover original works from authentic local artists"}
+                {t("customerBenefitDiscover")}
               </Text>
             </View>
             <View style={styles.perkItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
               <Text style={styles.perkText}>
-                {t("customerPerk2") || "Custom commission requests & live artist chat"}
+                {t("customerBenefitCommission")}
               </Text>
             </View>
           </View>
         </Pressable>
 
-        {/* Action Button */}
         <Pressable
           style={styles.btn}
           onPress={() => router.push({ pathname: "/signup", params: { role: selected } })}
@@ -136,7 +128,6 @@ export default function RoleSelectScreen() {
           <Ionicons name="arrow-forward" size={18} color={colors.accentText} style={{ marginLeft: 6 }} />
         </Pressable>
 
-        {/* Back to Login */}
         <Pressable onPress={() => router.push("/login")} style={styles.loginRow}>
           <Text style={styles.loginPrompt}>{t("alreadyHaveAccountPrompt") || "Already have an account?"} </Text>
           <Text style={styles.loginLink}>{t("loginBtn")}</Text>
@@ -169,7 +160,7 @@ function createStyles(
     },
     brandHeader: {
       alignItems: "center",
-      marginBottom: 28,
+      marginBottom: 30,
     },
     logo: {
       width: 140,
@@ -178,7 +169,7 @@ function createStyles(
     },
     title: {
       color: colors.text,
-      fontSize: 22,
+      fontSize: 24,
       fontWeight: "800",
       textAlign: "center",
       letterSpacing: 0.2,
@@ -186,18 +177,18 @@ function createStyles(
     },
     subtitle: {
       color: colors.textMuted,
-      fontSize: 13,
+      fontSize: 14,
       textAlign: "center",
       marginTop: 6,
-      lineHeight: 18,
+      lineHeight: 20,
       paddingHorizontal: 12,
     },
     roleCard: {
-      borderWidth: 1.5,
+      borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 16,
-      padding: 18,
-      marginBottom: 16,
+      padding: 20,
+      marginBottom: 14,
       backgroundColor: colors.surface,
       elevation: 1,
       shadowColor: "#000",
@@ -236,33 +227,16 @@ function createStyles(
     cardTitleWrap: {
       flex: 1,
     },
-    badgeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
     cardTitle: {
       color: colors.text,
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: "700",
-    },
-    creatorBadge: {
-      backgroundColor: colors.accent,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-    },
-    creatorBadgeText: {
-      color: colors.accentText,
-      fontSize: 9,
-      fontWeight: "800",
-      letterSpacing: 0.5,
     },
     cardSub: {
       color: colors.textMuted,
-      fontSize: 12,
+      fontSize: 13,
       marginTop: 3,
-      lineHeight: 16,
+      lineHeight: 18,
     },
     radioCircle: {
       width: 22,
@@ -284,8 +258,8 @@ function createStyles(
       backgroundColor: colors.accent,
     },
     perksList: {
-      marginTop: 14,
-      paddingTop: 12,
+      marginTop: 16,
+      paddingTop: 14,
       borderTopWidth: 1,
       borderTopColor: colors.border,
       gap: 6,
@@ -297,7 +271,7 @@ function createStyles(
     },
     perkText: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: "500",
     },
     btn: {
