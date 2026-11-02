@@ -1,17 +1,24 @@
 import mimetypes
 import base64
 import tempfile
+from datetime import timedelta
 from io import BytesIO
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 from PIL import Image
 
-from accounts.models import ArtistProfile, Notification, User
+from accounts.models import ArtistProfile, ArtistStudioPhoto, Notification, User
+from accounts.models import (
+    ArtistStudioStoryComment,
+    ArtistStudioStoryLike,
+    ArtistStudioStoryView,
+)
 from .models import Conversation, Message, Product
 
 
@@ -617,6 +624,170 @@ class ArtistStudioPhotoApiTests(APITestCase):
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(photo.image.storage.exists(stored_image_name))
         self.assertFalse(self.artist.studio_photos.filter(pk=photo_id).exists())
+
+    def test_public_stories_feed_includes_artist_and_media_details(self):
+        photo = self.artist.studio_photos.create(
+            image=self.make_photo_upload(),
+            caption="At work in my studio",
+        )
+        self.other_artist.is_suspended = True
+        self.other_artist.save(update_fields=["is_suspended"])
+        self.other_artist.studio_photos.create(
+            image=self.make_photo_upload("suspended-studio.png"),
+            caption="Suspended artist studio",
+        )
+
+        response = self.client.get(reverse("artist-stories"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        story = response.data["results"][0]
+        self.assertEqual(story["id"], photo.id)
+        self.assertEqual(story["artist_id"], self.artist.id)
+        self.assertEqual(story["artist_name"], self.artist.brand_name)
+        self.assertEqual(story["caption"], "At work in my studio")
+        self.assertEqual(story["media_type"], "image")
+        self.assertEqual(response.data["count"], 1)
+
+    def test_customer_can_like_and_comment_on_story_and_artist_is_notified(self):
+        story = self.artist.studio_photos.create(
+            image=self.make_photo_upload(),
+            caption="At work in my studio",
+        )
+        self.client.force_authenticate(self.customer)
+
+        like_response = self.client.post(reverse("artist-story-like", args=[story.id]))
+        self.assertEqual(like_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(like_response.data, {"liked": True, "like_count": 1})
+        self.assertTrue(
+            ArtistStudioStoryLike.objects.filter(story=story, user=self.customer).exists()
+        )
+        like_notification = Notification.objects.get(
+            user=self.artist_user,
+            notification_type="story_like",
+        )
+        self.assertEqual(like_notification.data["story_id"], story.id)
+
+        comment_response = self.client.post(
+            reverse("artist-story-comments", args=[story.id]),
+            {"text": "Beautiful work!"},
+            format="json",
+        )
+        self.assertEqual(comment_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(comment_response.data["username"], self.customer.username)
+        self.assertTrue(
+            ArtistStudioStoryComment.objects.filter(
+                story=story,
+                customer=self.customer,
+                text="Beautiful work!",
+            ).exists()
+        )
+        comment_notification = Notification.objects.get(
+            user=self.artist_user,
+            notification_type="story_comment",
+        )
+        self.assertEqual(comment_notification.data["story_id"], story.id)
+
+        feed_response = self.client.get(reverse("artist-stories"))
+        self.assertEqual(feed_response.data["results"][0]["like_count"], 1)
+        self.assertEqual(feed_response.data["results"][0]["comments_count"], 1)
+        self.assertTrue(feed_response.data["results"][0]["liked_by_me"])
+
+        unlike_response = self.client.post(reverse("artist-story-like", args=[story.id]))
+        self.assertEqual(unlike_response.data, {"liked": False, "like_count": 0})
+
+    def test_public_can_read_story_comments_but_must_sign_in_to_post_or_like(self):
+        story = self.artist.studio_photos.create(
+            image=self.make_photo_upload(),
+            caption="At work in my studio",
+        )
+
+        list_response = self.client.get(reverse("artist-story-comments", args=[story.id]))
+        post_response = self.client.post(
+            reverse("artist-story-comments", args=[story.id]),
+            {"text": "Hello"},
+            format="json",
+        )
+        like_response = self.client.post(reverse("artist-story-like", args=[story.id]))
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 0)
+        self.assertEqual(post_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(like_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_story_views_are_counted_once_per_viewer_and_artist_can_see_analytics(self):
+        story = self.artist.studio_photos.create(
+            image=self.make_photo_upload(),
+            caption="At work in my studio",
+        )
+        viewer_key = "anonymous-viewer-123456"
+
+        first_view = self.client.post(
+            reverse("artist-story-view", args=[story.id]),
+            {"viewer_key": viewer_key},
+            format="json",
+        )
+        second_view = self.client.post(
+            reverse("artist-story-view", args=[story.id]),
+            {"viewer_key": viewer_key},
+            format="json",
+        )
+
+        self.assertEqual(first_view.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_view.data["views_count"], 1)
+        self.assertEqual(second_view.data["views_count"], 1)
+        self.assertEqual(
+            ArtistStudioStoryView.objects.filter(story=story).count(),
+            1,
+        )
+        self.assertNotIn(
+            "views_count",
+            self.client.get(reverse("artist-stories")).data["results"][0],
+        )
+
+        self.client.force_authenticate(self.artist_user)
+        analytics = self.client.get(reverse("artist-story-analytics"))
+        self.assertEqual(analytics.status_code, status.HTTP_200_OK)
+        self.assertEqual(analytics.data["views_count"], 1)
+        self.assertEqual(analytics.data["stories"][0]["id"], story.id)
+        self.assertEqual(analytics.data["stories"][0]["views_count"], 1)
+
+        self.client.force_authenticate(self.customer)
+        forbidden_analytics = self.client.get(reverse("artist-story-analytics"))
+        self.assertEqual(forbidden_analytics.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_stories_expire_from_home_feed_but_remain_in_public_studio_archive(self):
+        recent_story = self.artist.studio_photos.create(
+            image=self.make_photo_upload("recent-story.png"),
+            caption="New story",
+        )
+        archived_story = self.artist.studio_photos.create(
+            image=self.make_photo_upload("archived-story.png"),
+            caption="Permanent archive",
+        )
+        ArtistStudioPhoto.objects.filter(pk=archived_story.pk).update(
+            created_at=timezone.now() - timedelta(hours=25)
+        )
+
+        feed = self.client.get(reverse("artist-stories"))
+        profile = self.client.get(reverse("artist-profile", args=[self.artist.pk]))
+
+        self.assertEqual(feed.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [story["id"] for story in feed.data["results"]],
+            [recent_story.id],
+        )
+        self.assertEqual(profile.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {story["id"] for story in profile.data["studio_photos"]},
+            {recent_story.id, archived_story.id},
+        )
+        self.client.force_authenticate(self.artist_user)
+        analytics = self.client.get(reverse("artist-story-analytics"))
+        self.assertEqual(analytics.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {story["id"] for story in analytics.data["stories"]},
+            {recent_story.id, archived_story.id},
+        )
 
     def test_customer_cannot_manage_artist_studio_photos(self):
         self.client.force_authenticate(self.customer)

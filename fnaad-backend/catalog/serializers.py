@@ -507,7 +507,12 @@ class CommissionRequestSerializer(serializers.ModelSerializer):
 
 
 
-from accounts.models import ArtistProfile, ArtistStudioPhoto, User
+from accounts.models import (
+    ArtistProfile,
+    ArtistStudioPhoto,
+    ArtistStudioStoryComment,
+    User,
+)
 
 
 class ArtistStudioPhotoSerializer(serializers.ModelSerializer):
@@ -537,6 +542,52 @@ class ArtistStudioPhotoSerializer(serializers.ModelSerializer):
 
     def get_media_type(self, obj):
         return "video" if obj.video else "image"
+
+
+class ArtistStorySerializer(ArtistStudioPhotoSerializer):
+    artist_id = serializers.IntegerField(source="artist.id", read_only=True)
+    artist_name = serializers.CharField(source="artist.brand_name", read_only=True)
+    artist_avatar = serializers.ImageField(source="artist.avatar", read_only=True, allow_null=True)
+    like_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.IntegerField(read_only=True)
+    liked_by_me = serializers.SerializerMethodField()
+
+    class Meta(ArtistStudioPhotoSerializer.Meta):
+        fields = [
+            "id", "artist_id", "artist_name", "artist_avatar",
+            "image", "video", "media_type", "duration_seconds",
+            "caption", "created_at", "like_count", "comments_count",
+            "liked_by_me",
+        ]
+
+    def get_liked_by_me(self, obj):
+        return bool(getattr(obj, "_liked_by_request_user", False))
+
+
+class ArtistStoryAnalyticsSerializer(ArtistStorySerializer):
+    views_count = serializers.IntegerField(read_only=True)
+
+    class Meta(ArtistStorySerializer.Meta):
+        fields = [*ArtistStorySerializer.Meta.fields, "views_count"]
+
+
+class ArtistStudioStoryCommentSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="customer.username", read_only=True)
+
+    class Meta:
+        model = ArtistStudioStoryComment
+        fields = ["id", "story", "customer", "username", "text", "created_at"]
+        read_only_fields = ["id", "story", "customer", "username", "created_at"]
+
+    def validate_text(self, value):
+        text = value.strip()
+        if not text:
+            raise serializers.ValidationError("Comment cannot be empty.")
+        return text
+
+
+class ArtistStudioStoryViewSerializer(serializers.Serializer):
+    viewer_key = serializers.CharField(min_length=16, max_length=64)
 
 
 class ArtistPublicSerializer(serializers.ModelSerializer):

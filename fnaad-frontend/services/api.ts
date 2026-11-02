@@ -490,6 +490,8 @@ export const getArtistFollowStatus = (artistId: number) => api.get(`/catalog/art
 export const toggleArtistFollow = (artistId: number) => api.post(`/catalog/artists/${artistId}/follow/`);
 export const getFollowerProfile = (userId: number) => api.get(`/accounts/followers/${userId}/profile/`);
 export const getMyStudioPhotos = () => api.get("/catalog/artists/me/studio/");
+export const getMyStudioStoryAnalytics = () =>
+  api.get("/catalog/artists/me/stories/analytics/");
 export const uploadStudioMedia = (media: {
   uri: string;
   fileName?: string | null;
@@ -617,6 +619,28 @@ export const getProductComments = (productId: number) =>
 
 export const createProductComment = (productId: number, text: string) =>
   api.post(`/catalog/products/${productId}/comments/`, { text });
+
+export const toggleStoryLike = (storyId: number) =>
+  api.post(`/catalog/stories/${storyId}/like/`);
+
+export const getStoryComments = (storyId: number) =>
+  api.get(`/catalog/stories/${storyId}/comments/`);
+
+export const createStoryComment = (storyId: number, text: string) =>
+  api.post(`/catalog/stories/${storyId}/comments/`, { text });
+
+const createStoryViewerKey = () =>
+  `viewer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+
+export const recordStoryView = async (storyId: number) => {
+  const storageKey = "fnaad_story_viewer_key";
+  let viewerKey = await AsyncStorage.getItem(storageKey);
+  if (!viewerKey) {
+    viewerKey = createStoryViewerKey();
+    await AsyncStorage.setItem(storageKey, viewerKey);
+  }
+  return api.post(`/catalog/stories/${storyId}/view/`, { viewer_key: viewerKey });
+};
 
 export const getMyFavorites = () => api.get("/catalog/favorites/");
 

@@ -7,6 +7,7 @@ import {
   deleteStudioPhoto,
   getMyArtistProfile,
   getMyStudioPhotos,
+  getMyStudioStoryAnalytics,
   resolveMediaUrl,
   updateMyArtistProfile,
   uploadStudioMedia,
@@ -22,6 +23,25 @@ type StudioMedia = {
   media_type: "image" | "video";
   duration_seconds: number | null;
   caption: string;
+  created_at: string;
+};
+type StoryAnalytics = {
+  id: number;
+  image: string | null;
+  video: string | null;
+  media_type: "image" | "video";
+  duration_seconds: number | null;
+  caption: string;
+  created_at: string;
+  views_count: number;
+  like_count: number;
+  comments_count: number;
+};
+type StoryAnalyticsSummary = {
+  views_count: number;
+  like_count: number;
+  comments_count: number;
+  stories: StoryAnalytics[];
 };
 type StudioMediaAsset = Pick<ImagePicker.ImagePickerAsset, "uri" | "fileName" | "mimeType" | "file" | "duration"> & {
   type: "image" | "video";
@@ -48,6 +68,22 @@ export default function EditArtistProfileScreen() {
   const [studioLoading, setStudioLoading] = useState(true);
   const [studioSaving, setStudioSaving] = useState(false);
   const [deletingStudioPhotoId, setDeletingStudioPhotoId] = useState<number | null>(null);
+  const [storyAnalytics, setStoryAnalytics] = useState<StoryAnalyticsSummary | null>(null);
+  const [storyAnalyticsLoading, setStoryAnalyticsLoading] = useState(true);
+  const [storyAnalyticsError, setStoryAnalyticsError] = useState("");
+
+  const refreshStoryAnalytics = () => {
+    setStoryAnalyticsLoading(true);
+    getMyStudioStoryAnalytics()
+      .then(({ data }) => {
+        setStoryAnalytics(data);
+        setStoryAnalyticsError("");
+      })
+      .catch((error) => {
+        setStoryAnalyticsError(error?.response?.data?.detail || "Unable to load story analytics. Please try again.");
+      })
+      .finally(() => setStoryAnalyticsLoading(false));
+  };
 
   useEffect(() => { getMyArtistProfile().then(({ data }) => {
     setBrandName(data.brand_name || ""); setPractice(data.artistic_practice || ""); setBio(data.bio || "");
@@ -59,6 +95,10 @@ export default function EditArtistProfileScreen() {
       .then(({ data }) => setStudioPhotos(unwrapList<StudioMedia>(data)))
       .catch(() => Alert.alert("Unable to load Studio media", "Please try again."))
       .finally(() => setStudioLoading(false));
+  }, []);
+
+  useEffect(() => {
+    refreshStoryAnalytics();
   }, []);
 
   const pickAvatar = async () => {
@@ -115,6 +155,7 @@ export default function EditArtistProfileScreen() {
     try {
       const { data } = await uploadStudioMedia(studioMedia, studioCaption.trim());
       setStudioPhotos((current) => [data, ...current]);
+      refreshStoryAnalytics();
       setStudioMedia(null);
       setStudioCaption("");
     } catch (error: any) {
@@ -131,7 +172,10 @@ export default function EditArtistProfileScreen() {
     const remove = () => {
       setDeletingStudioPhotoId(photo.id);
       deleteStudioPhoto(photo.id)
-        .then(() => setStudioPhotos((current) => current.filter((item) => item.id !== photo.id)))
+        .then(() => {
+          setStudioPhotos((current) => current.filter((item) => item.id !== photo.id));
+          refreshStoryAnalytics();
+        })
         .catch((error: any) => Alert.alert("Could not remove Studio media", error?.response?.data?.detail || "Please try again."))
         .finally(() => setDeletingStudioPhotoId(null));
     };
@@ -178,6 +222,32 @@ export default function EditArtistProfileScreen() {
       <Text style={styles.label}>Instagram</Text><TextInput style={styles.field} value={instagram} onChangeText={setInstagram} placeholder="yourhandle" placeholderTextColor={colors.textMuted} autoCapitalize="none" maxLength={60} />
       <Text style={styles.label}>Portfolio website</Text><TextInput style={styles.field} value={portfolioUrl} onChangeText={setPortfolioUrl} placeholder="http://yourportfolio.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="url" />
       <Text style={styles.section}>Your studio</Text>
+      <Text style={styles.hint}>New uploads appear as Stories on the home page for 24 hours. Every photo and video stays on your public Studio archive until you delete it.</Text>
+      <Text style={styles.section}>Story analytics</Text>
+      {storyAnalyticsLoading ? <ActivityIndicator color={colors.accent} /> : storyAnalyticsError ? (
+        <View style={styles.analyticsError}>
+          <Text style={styles.analyticsErrorText}>{storyAnalyticsError}</Text>
+          <Pressable onPress={refreshStoryAnalytics}><Text style={styles.analyticsRetry}>Retry</Text></Pressable>
+        </View>
+      ) : (
+        <View style={styles.analyticsCard}>
+          <View style={styles.analyticsSummaryRow}>
+            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.views_count || 0}</Text><Text style={styles.analyticsLabel}>Views</Text></View>
+            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.like_count || 0}</Text><Text style={styles.analyticsLabel}>Likes</Text></View>
+            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.comments_count || 0}</Text><Text style={styles.analyticsLabel}>Comments</Text></View>
+          </View>
+          {storyAnalytics?.stories.map((story) => (
+            <View key={story.id} style={styles.analyticsStoryRow}>
+              <Text style={styles.analyticsStoryTitle} numberOfLines={1}>
+                {story.caption || (story.media_type === "video" ? "Studio video" : "Studio photo")}
+              </Text>
+              <Text style={styles.analyticsStoryCounts}>
+                {story.views_count} views · {story.like_count} likes · {story.comments_count} comments
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
       <Text style={styles.hint}>Share your creative space with photos and up to three videos, each no longer than three minutes.</Text>
       <View style={styles.studioPickerRow}>
         <Pressable style={styles.studioPicker} onPress={() => void pickStudioPhoto()}>
@@ -224,6 +294,8 @@ export default function EditArtistProfileScreen() {
             <View style={styles.studioPhotoDetails}>
               <Text style={styles.studioPhotoCaption} numberOfLines={2}>
                 {photo.caption || (photo.media_type === "video" ? `Studio video${photo.duration_seconds != null ? ` · ${photo.duration_seconds}s` : ""}` : "Studio photo")}
+                {"\n"}
+                {Date.now() - new Date(photo.created_at).getTime() < 24 * 60 * 60 * 1000 ? "Story · expires from home after 24 hours" : "Permanent Studio archive"}
               </Text>
               <Pressable onPress={() => removeStudioPhoto(photo)} disabled={deletingStudioPhotoId === photo.id} accessibilityRole="button" accessibilityLabel={`Remove studio ${photo.media_type}`}>
                 {deletingStudioPhotoId === photo.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="trash-outline" size={19} color="#B42318" />}
@@ -260,6 +332,17 @@ function createStyles(colors: any) {
     studioPicker: { flex: 1, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, borderRadius: 12, minHeight: 92, padding: 12, marginBottom: 10, alignItems: "center", justifyContent: "center", gap: 8 },
     studioPickerRow: { flexDirection: "row", gap: 10 },
     studioPickerDisabled: { opacity: 0.5 },
+    analyticsCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, backgroundColor: colors.surface, marginBottom: 14 },
+    analyticsSummaryRow: { flexDirection: "row", justifyContent: "space-around", paddingBottom: 10 },
+    analyticsMetric: { alignItems: "center", gap: 3 },
+    analyticsValue: { color: colors.accent, fontSize: 20, fontWeight: "800" },
+    analyticsLabel: { color: colors.textMuted, fontSize: 11 },
+    analyticsStoryRow: { paddingVertical: 9, borderTopWidth: 1, borderTopColor: colors.border, gap: 3 },
+    analyticsStoryTitle: { color: colors.text, fontSize: 12, fontWeight: "700" },
+    analyticsStoryCounts: { color: colors.textMuted, fontSize: 11 },
+    analyticsError: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, marginBottom: 14 },
+    analyticsErrorText: { flex: 1, color: "#B42318", fontSize: 12 },
+    analyticsRetry: { color: colors.accent, fontSize: 12, fontWeight: "800" },
     studioPreview: { width: 76, height: 76, borderRadius: 9 },
     studioPickerText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
     studioAddButton: { backgroundColor: colors.accent, padding: 12, borderRadius: 9, alignItems: "center", marginBottom: 14 },

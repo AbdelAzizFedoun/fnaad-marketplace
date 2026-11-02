@@ -49,6 +49,8 @@ export default function NotificationsScreen() {
     product_status: "bag-outline",
     commission_response: "mail-outline",
     comment: "chatbubble-outline",
+    story_comment: "chatbubble-ellipses-outline",
+    story_like: "heart-outline",
     review: "star-outline",
     favorite: "heart-outline",
     delivery: "cube-outline",
@@ -66,7 +68,7 @@ export default function NotificationsScreen() {
   const getCategory = (notification: AppNotification): NotificationFilter => {
     if (notification.notification_type === "commission_response") return "commissions";
     if (["order", "payment", "delivery", "product_status", "artist_new_product"].includes(notification.notification_type)) return "orders";
-    if (["comment", "review", "favorite", "artist_follow"].includes(notification.notification_type)) return "social";
+    if (["comment", "review", "favorite", "artist_follow", "story_comment", "story_like"].includes(notification.notification_type)) return "social";
     if (["copy_review", "copyright_report", "copyright_report_admin"].includes(notification.notification_type)) return "copyright";
     return "all";
   };
@@ -181,7 +183,12 @@ export default function NotificationsScreen() {
       });
     }
 
-    if (notification.notification_type === "comment" && notification.data.product_id) {
+    if (["story_comment", "story_like"].includes(notification.notification_type) && notification.data.artist_id) {
+      router.push({
+        pathname: "/artist/[id]",
+        params: { id: String(notification.data.artist_id), tab: "studio" },
+      });
+    } else if (notification.notification_type === "comment" && notification.data.product_id) {
       router.push({
         pathname: "/product/[id]",
         params: {

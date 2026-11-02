@@ -153,6 +153,58 @@ class ArtistStudioPhoto(models.Model):
         ]
 
 
+class ArtistStudioStoryLike(models.Model):
+    story = models.ForeignKey(
+        ArtistStudioPhoto,
+        on_delete=models.CASCADE,
+        related_name="story_likes",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="studio_story_likes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["story", "user"], name="unique_studio_story_like")
+        ]
+
+
+class ArtistStudioStoryComment(models.Model):
+    story = models.ForeignKey(
+        ArtistStudioPhoto,
+        on_delete=models.CASCADE,
+        related_name="story_comments",
+    )
+    customer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="studio_story_comments",
+    )
+    text = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ArtistStudioStoryView(models.Model):
+    story = models.ForeignKey(
+        ArtistStudioPhoto,
+        on_delete=models.CASCADE,
+        related_name="story_views",
+    )
+    viewer_key = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["story", "viewer_key"], name="unique_studio_story_viewer")
+        ]
+
+
 class ArtistFollow(models.Model):
     artist = models.ForeignKey(ArtistProfile, on_delete=models.CASCADE, related_name="followers")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="followed_artists")

@@ -31,6 +31,7 @@ type ArtistProfile = {
     media_type?: "image" | "video";
     duration_seconds?: number | null;
     caption?: string;
+    created_at?: string;
   }[];
 };
 
@@ -48,7 +49,7 @@ function StudioVideo({ uri, style }: { uri: string; style: object }) {
 }
 
 export default function ArtistProfileScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const router = useRouter();
   const { t } = useLanguage();
   const { colors } = useTheme();
@@ -83,6 +84,10 @@ export default function ArtistProfileScreen() {
       .finally(() => setLoading(false));
   }, [id, loggedIn]);
 
+  useEffect(() => {
+    if (tab === "studio") setActiveTab("studio");
+  }, [tab]);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -102,6 +107,21 @@ export default function ArtistProfileScreen() {
   }
 
   const avatarUrl = resolveMediaUrl(artist.avatar || undefined);
+  const storyCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const currentStories = (artist.studio_photos || []).filter(
+    (media) => media.created_at && new Date(media.created_at).getTime() >= storyCutoff
+  );
+  const archivedStories = (artist.studio_photos || []).filter(
+    (media) => !media.created_at || new Date(media.created_at).getTime() < storyCutoff
+  );
+  const studioMediaCard = (media: NonNullable<ArtistProfile["studio_photos"]>[number]) => (
+    <View key={media.id} style={styles.studioCard}>
+      {media.media_type === "video" && media.video
+        ? <StudioVideo uri={resolveMediaUrl(media.video)!} style={styles.studioImage} />
+        : media.image ? <Image source={{ uri: resolveMediaUrl(media.image)! }} style={styles.studioImage} resizeMode="cover" /> : null}
+      {media.caption ? <Text style={styles.studioCaption}>{media.caption}</Text> : null}
+    </View>
+  );
   const handleFollow = async () => {
     if (!loggedIn) { router.push("/login"); return; }
     const result = await toggleArtistFollow(Number(id));
@@ -150,7 +170,16 @@ export default function ArtistProfileScreen() {
 
         <View style={styles.tabBar}>{(["works", "studio", "about"] as ProfileTab[]).map((tab) => <Pressable key={tab} onPress={() => setActiveTab(tab)} style={[styles.tab, activeTab === tab && styles.activeTab]}><Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab === "works" ? t("worksTab") : tab === "studio" ? t("studioTab") : t("aboutTab")}</Text></Pressable>)}</View>
 
-        {activeTab === "studio" && <View style={styles.studioSection}>{artist.studio_photos?.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.studioRow}>{artist.studio_photos.map((media) => <View key={media.id} style={styles.studioCard}>{media.media_type === "video" && media.video ? <StudioVideo uri={resolveMediaUrl(media.video)!} style={styles.studioImage} /> : media.image ? <Image source={{ uri: resolveMediaUrl(media.image)! }} style={styles.studioImage} resizeMode="cover" /> : null}{media.caption ? <Text style={styles.studioCaption}>{media.caption}</Text> : null}</View>)}</ScrollView> : <Text style={styles.empty}>{t("noStudioContent")}</Text>}</View>}
+        {activeTab === "studio" && <View style={styles.studioSection}>
+          <Text style={styles.studioSectionTitle}>{t("activeStudioStories")}</Text>
+          {currentStories.length
+            ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.studioRow}>{currentStories.map(studioMediaCard)}</ScrollView>
+            : <Text style={styles.studioSectionHint}>{t("noActiveStudioStories")}</Text>}
+          <Text style={styles.studioSectionTitle}>{t("studioArchive")}</Text>
+          {archivedStories.length
+            ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.studioRow}>{archivedStories.map(studioMediaCard)}</ScrollView>
+            : <Text style={styles.studioSectionHint}>{t("studioArchiveEmpty")}</Text>}
+        </View>}
         {activeTab === "about" && <View style={styles.aboutCard}><Text style={styles.sectionTitle}>{t("aboutTab")} {artist.brand_name}</Text><Text style={styles.aboutText}>{artist.bio || t("noArtistBio")}</Text><Text style={styles.aboutMeta}>{artist.region_display} · {artist.follower_count} {t("followers")}</Text></View>}
 
         {activeTab === "works" && <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("moreFromArtist")} {artist.brand_name}</Text></View>}
@@ -242,7 +271,9 @@ function createStyles(
     aboutText: { color: colors.text, fontSize: 14, lineHeight: 21, marginTop: 10 },
     aboutMeta: { color: colors.textMuted, fontSize: 12, marginTop: 14 },
     studioSection: { marginBottom: 20 },
-    studioRow: { gap: 10, paddingHorizontal: 16, paddingTop: 10 },
+    studioSectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800", paddingHorizontal: 16, paddingTop: 14 },
+    studioSectionHint: { color: colors.textMuted, fontSize: 12, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 },
+    studioRow: { gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
     studioCard: { width: 190, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
     studioImage: { width: 190, height: 125, backgroundColor: colors.border },
     studioCaption: { color: colors.textMuted, fontSize: 11, padding: 8 },

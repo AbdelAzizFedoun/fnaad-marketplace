@@ -19,7 +19,7 @@ from social.models import Comment
 from social.models import Comment, Like
 from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer
 from .models import Product
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Exists, OuterRef
 from django.db.models.functions import Coalesce
 
 from billing.models import Subscription
@@ -38,9 +38,27 @@ class StandardResultsPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
-from accounts.models import ArtistFollow, ArtistProfile, ArtistStudioPhoto
+from accounts.models import (
+    ArtistFollow,
+    ArtistProfile,
+    ArtistStudioPhoto,
+    ArtistStudioStoryComment,
+    ArtistStudioStoryLike,
+    ArtistStudioStoryView,
+)
 from .models import Product, ProductImage, Conversation, Message
-from .serializers import ArtistStudioPhotoSerializer, ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, CreationEvidenceSerializer
+from .serializers import (
+    ArtistStudioPhotoSerializer,
+    ArtistStudioStoryCommentSerializer,
+    ArtistStoryAnalyticsSerializer,
+    ArtistStudioStoryViewSerializer,
+    ArtistStorySerializer,
+    ProductSerializer,
+    ProductImageSerializer,
+    ConversationSerializer,
+    MessageSerializer,
+    CreationEvidenceSerializer,
+)
 from .image_utils import generate_product_thumbnail, compute_image_hashes
 from .duplication import find_potential_copy
 from accounts.push import send_push_notification, create_notification
@@ -1119,6 +1137,163 @@ class MyArtistStudioPhotoListCreateView(generics.ListCreateAPIView):
             serializer.save(
                 artist=locked_artist,
                 duration_seconds=int(duration_seconds) if duration_seconds is not None else None,
+            )
+
+
+class ArtistStoryListView(generics.ListAPIView):
+    serializer_class = ArtistStorySerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsPagination
+
+    def get_queryset(self):
+        queryset = ArtistStudioPhoto.objects.filter(
+            artist__user__is_active=True,
+            artist__is_suspended=False,
+            created_at__gte=timezone.now() - timedelta(hours=24),
+        ).exclude(
+            models.Q(image="") & models.Q(video="")
+        ).select_related("artist").annotate(
+            like_count=Count("story_likes", distinct=True),
+            comments_count=Count("story_comments", distinct=True),
+        )
+        if self.request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _liked_by_request_user=Exists(
+                    ArtistStudioStoryLike.objects.filter(
+                        story_id=OuterRef("pk"),
+                        user=self.request.user,
+                    )
+                )
+            )
+        return queryset.order_by("-created_at", "-id")
+
+
+class ArtistStoryViewCreateView(drf_views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, pk):
+        story = get_object_or_404(
+            ArtistStudioPhoto.objects.filter(
+                artist__user__is_active=True,
+                artist__is_suspended=False,
+                created_at__gte=timezone.now() - timedelta(hours=24),
+            ),
+            pk=pk,
+        )
+        serializer = ArtistStudioStoryViewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        viewer_key = (
+            f"user:{request.user.id}"
+            if request.user.is_authenticated
+            else serializer.validated_data["viewer_key"]
+        )
+        ArtistStudioStoryView.objects.get_or_create(
+            story=story,
+            viewer_key=viewer_key,
+        )
+        return Response({"views_count": story.story_views.count()})
+
+
+class MyArtistStoryAnalyticsView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        artist = get_artist_profile_for_user(request.user)
+        if artist is None:
+            raise PermissionDenied("Only artists can view Studio Story analytics.")
+
+        stories = list(
+            ArtistStudioPhoto.objects.filter(artist=artist)
+            .exclude(models.Q(image="") & models.Q(video=""))
+            .select_related("artist")
+            .annotate(
+                views_count=Count("story_views", distinct=True),
+                like_count=Count("story_likes", distinct=True),
+                comments_count=Count("story_comments", distinct=True),
+            )
+            .order_by("-created_at", "-id")
+        )
+        serialized_stories = ArtistStoryAnalyticsSerializer(
+            stories,
+            many=True,
+            context={"request": request},
+        ).data
+        return Response({
+            "views_count": sum(story.views_count for story in stories),
+            "like_count": sum(story.like_count for story in stories),
+            "comments_count": sum(story.comments_count for story in stories),
+            "stories": serialized_stories,
+        })
+
+
+class ArtistStoryLikeView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        story = get_object_or_404(
+            ArtistStudioPhoto.objects.filter(
+                artist__user__is_active=True,
+                artist__is_suspended=False,
+            ),
+            pk=pk,
+        )
+        like, created = ArtistStudioStoryLike.objects.get_or_create(
+            story=story,
+            user=request.user,
+        )
+        if not created:
+            like.delete()
+            liked = False
+        else:
+            liked = True
+            if story.artist.user_id != request.user.id:
+                create_notification(
+                    story.artist.user,
+                    "New Studio Story like",
+                    f"{request.user.username} liked your Studio Story.",
+                    "story_like",
+                    {"story_id": story.id, "artist_id": story.artist_id},
+                )
+
+        return Response({
+            "liked": liked,
+            "like_count": story.story_likes.count(),
+        })
+
+
+class ArtistStoryCommentListCreateView(generics.ListCreateAPIView):
+    serializer_class = ArtistStudioStoryCommentSerializer
+    pagination_class = StandardResultsPagination
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+    def get_story(self):
+        return get_object_or_404(
+            ArtistStudioPhoto.objects.filter(
+                artist__user__is_active=True,
+                artist__is_suspended=False,
+            ),
+            pk=self.kwargs["story_id"],
+        )
+
+    def get_queryset(self):
+        return ArtistStudioStoryComment.objects.filter(
+            story=self.get_story(),
+        ).select_related("customer")
+
+    def perform_create(self, serializer):
+        story = self.get_story()
+        comment = serializer.save(story=story, customer=self.request.user)
+        if story.artist.user_id != self.request.user.id:
+            create_notification(
+                story.artist.user,
+                "New Studio Story comment",
+                f'{self.request.user.username} commented on your Studio Story: "{comment.text[:100]}"',
+                "story_comment",
+                {"story_id": story.id, "artist_id": story.artist_id},
             )
 
 

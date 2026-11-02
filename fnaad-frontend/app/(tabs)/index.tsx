@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl, Image as NativeImage, PanResponder } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl, Image as NativeImage, PanResponder, Share } from "react-native";
 import Image from "../../components/MediaImage";
 import type { DimensionValue } from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
-import { api, resolveMediaUrl, toggleFavorite, getFavoriteIds, unwrapList } from "../../services/api";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { api, createStoryComment, getStoryComments, recordStoryView, resolveMediaUrl, toggleFavorite, toggleStoryLike, getFavoriteIds, unwrapList } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -15,6 +15,7 @@ import ShareSheet from "../../components/ShareSheet";
 import { shadow, RADIUS } from "../../components/shadow";
 import React from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useVideoPlayer, VideoView } from "expo-video";
 
 type Product = {
   id: number;
@@ -41,6 +42,46 @@ type Product = {
 };
 
 type SpotlightProduct = Product & { delivered_review_count?: number; spotlight_expires_at?: string | null };
+type ArtistStory = {
+  id: number;
+  artist_id: number;
+  artist_name: string;
+  artist_avatar: string | null;
+  image: string | null;
+  video: string | null;
+  media_type: "image" | "video";
+  caption: string;
+  created_at: string;
+  like_count: number;
+  comments_count: number;
+  liked_by_me: boolean;
+};
+type ArtistStoryComment = {
+  id: number;
+  username: string;
+  text: string;
+  created_at: string;
+};
+
+function StoryVideo({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (videoPlayer) => {
+    videoPlayer.loop = true;
+    videoPlayer.play();
+  });
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls />;
+}
+
+function formatStoryAge(value: string, t: (key: string, params?: Record<string, string>) => string) {
+  const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return t("storyJustNow");
+  if (minutes < 60) return t("storyMinutesAgo", { count: String(minutes) });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t("storyHoursAgo", { count: String(hours) });
+  const days = Math.floor(hours / 24);
+  if (days < 7) return t("storyDaysAgo", { count: String(days) });
+  return new Date(value).toLocaleDateString();
+}
 
 const SHOWCASE_INFO = [
   { eyebrow: "FROM FNAAD ARTISTS", title: "Art made by people.", subtitle: "Meet independent artists and find something meaningful to keep." },
@@ -101,6 +142,7 @@ function SkeletonCard({ cardWidth, colors }: { cardWidth: DimensionValue; colors
 
 export default function GalleryScreen() {
   const router = useRouter();
+  const { storyId: storyIdParam } = useLocalSearchParams<{ storyId?: string }>();
   const { loggedIn, initializing, user } = useAuth();
   const { t } = useLanguage();
   const { colors, fonts, mode } = useTheme();
@@ -123,6 +165,17 @@ export default function GalleryScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [spotlight, setSpotlight] = useState<SpotlightProduct[]>([]);
   const [spotlightLoading, setSpotlightLoading] = useState(true);
+  const [stories, setStories] = useState<ArtistStory[]>([]);
+  const [activeStoryArtistId, setActiveStoryArtistId] = useState<number | null>(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [storyComments, setStoryComments] = useState<ArtistStoryComment[]>([]);
+  const [storyCommentsVisible, setStoryCommentsVisible] = useState(false);
+  const [storyCommentsLoading, setStoryCommentsLoading] = useState(false);
+  const [storyCommentText, setStoryCommentText] = useState("");
+  const [storyCommentSending, setStoryCommentSending] = useState(false);
+  const [storyLikeSaving, setStoryLikeSaving] = useState(false);
+  const [storyActionError, setStoryActionError] = useState("");
+  const recordedStoryViews = useRef(new Set<number>());
   const [countdownNow, setCountdownNow] = useState(Date.now());
   const [showcaseIndex, setShowcaseIndex] = useState(0);
   const spotlightPanResponder = useRef(PanResponder.create({
@@ -134,6 +187,20 @@ export default function GalleryScreen() {
 
   const activeFilterCount = [selectedRegion, selectedCategory, selectedSort !== "newest"].filter(Boolean).length;
   const showcaseItems = [...SHOWCASE_INFO, ...spotlight];
+  const storiesByArtist = new Map<number, ArtistStory[]>();
+  for (const story of stories) {
+    const artistStories = storiesByArtist.get(story.artist_id) || [];
+    artistStories.push(story);
+    storiesByArtist.set(story.artist_id, artistStories);
+  }
+  const storyArtists = Array.from(storiesByArtist, ([artistId, media]) => ({
+    artistId,
+    artistName: media[0].artist_name,
+    artistAvatar: media[0].artist_avatar,
+    media: media.sort((first, second) => first.created_at.localeCompare(second.created_at)),
+  }));
+  const activeStoryGroup = storyArtists.find((artist) => artist.artistId === activeStoryArtistId);
+  const activeStory = activeStoryGroup?.media[activeStoryIndex];
 
   useEffect(() => {
     const cacheKey = "fnaad_spotlight_cache_v1";
@@ -160,6 +227,50 @@ export default function GalleryScreen() {
     };
     void loadSpotlight();
   }, []);
+
+  useEffect(() => {
+    api.get("/catalog/stories/?page_size=100")
+      .then((response) => setStories(unwrapList<ArtistStory>(response.data)))
+      .catch((error) => console.warn("Unable to load Studio Stories:", error.message));
+  }, []);
+
+  useEffect(() => {
+    const storyId = Number(storyIdParam);
+    if (!storyId || !stories.length) return;
+    const story = stories.find((item) => item.id === storyId);
+    if (story) {
+      const artist = storyArtists.find((item) => item.artistId === story.artist_id);
+      if (artist) {
+        setActiveStoryArtistId(artist.artistId);
+        setActiveStoryIndex(artist.media.findIndex((item) => item.id === story.id));
+      }
+    }
+    router.setParams({ storyId: undefined });
+  }, [router, storyIdParam, stories]);
+
+  useEffect(() => {
+    setStoryComments([]);
+    setStoryCommentsVisible(false);
+    setStoryCommentText("");
+    setStoryActionError("");
+  }, [activeStory?.id]);
+
+  useEffect(() => {
+    if (!activeStory || recordedStoryViews.current.has(activeStory.id)) return;
+    recordedStoryViews.current.add(activeStory.id);
+    recordStoryView(activeStory.id)
+      .then(({ data }) => {
+        setStories((current) => current.map((story) =>
+          story.id === activeStory.id
+            ? { ...story, views_count: data.views_count }
+            : story
+        ));
+      })
+      .catch((error) => {
+        recordedStoryViews.current.delete(activeStory.id);
+        console.warn("Unable to record Studio Story view:", error.message);
+      });
+  }, [activeStory?.id]);
 
   useEffect(() => {
     if (showcaseItems.length < 2) return;
@@ -256,6 +367,91 @@ export default function GalleryScreen() {
         ? { ...product, like_count: Math.max(0, (product.like_count || 0) + (wasFavorited ? 1 : -1)) }
         : product
       ));
+    });
+  };
+
+  const updateStory = (storyId: number, update: Partial<ArtistStory>) => {
+    setStories((current) => current.map((story) =>
+      story.id === storyId ? { ...story, ...update } : story
+    ));
+  };
+
+  const handleToggleStoryLike = async () => {
+    if (!activeStory || storyLikeSaving) return;
+    if (!loggedIn) {
+      router.push("/login");
+      return;
+    }
+    setStoryLikeSaving(true);
+    setStoryActionError("");
+    try {
+      const { data } = await toggleStoryLike(activeStory.id);
+      updateStory(activeStory.id, {
+        liked_by_me: data.liked,
+        like_count: data.like_count,
+      });
+    } catch (error) {
+      setStoryActionError(
+        (error as any)?.response?.data?.detail || t("storyLikeFailed")
+      );
+    } finally {
+      setStoryLikeSaving(false);
+    }
+  };
+
+  const openStoryComments = async () => {
+    if (!activeStory) return;
+    setStoryCommentsVisible((visible) => !visible);
+    if (storyCommentsVisible) return;
+    setStoryCommentsLoading(true);
+    setStoryActionError("");
+    try {
+      const { data } = await getStoryComments(activeStory.id);
+      setStoryComments(unwrapList<ArtistStoryComment>(data));
+    } catch (error) {
+      setStoryActionError(
+        (error as any)?.response?.data?.detail || t("storyCommentsFailed")
+      );
+    } finally {
+      setStoryCommentsLoading(false);
+    }
+  };
+
+  const submitStoryComment = async () => {
+    if (!activeStory || !storyCommentText.trim() || storyCommentSending) return;
+    if (!loggedIn) {
+      router.push("/login");
+      return;
+    }
+    setStoryCommentSending(true);
+    setStoryActionError("");
+    try {
+      const { data } = await createStoryComment(activeStory.id, storyCommentText.trim());
+      setStoryComments((current) => [data, ...current]);
+      setStoryCommentText("");
+      updateStory(activeStory.id, {
+        comments_count: activeStory.comments_count + 1,
+      });
+    } catch (error) {
+      setStoryActionError(
+        (error as any)?.response?.data?.text?.[0]
+          || (error as any)?.response?.data?.detail
+          || t("storyCommentFailed")
+      );
+    } finally {
+      setStoryCommentSending(false);
+    }
+  };
+
+  const shareActiveStory = () => {
+    if (!activeStory || !activeStoryGroup) return;
+    const mediaUrl = resolveMediaUrl(
+      activeStory.media_type === "video" ? activeStory.video : activeStory.image
+    );
+    Share.share({
+      message: `${activeStoryGroup.artistName} on FNAAD${activeStory.caption ? `: ${activeStory.caption}` : ""}${mediaUrl ? ` ${mediaUrl}` : ""}`,
+    }).catch((error) => {
+      setStoryActionError(error.message || t("storyShareFailed"));
     });
   };
 
@@ -450,6 +646,153 @@ export default function GalleryScreen() {
           </View>
         </Modal>
 
+        <Modal
+          visible={activeStoryArtistId !== null && !!activeStory}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setActiveStoryArtistId(null)}
+        >
+          <View style={styles.storyBackdrop}>
+            {activeStory && activeStoryGroup ? (
+              <View style={styles.storyViewer}>
+                {activeStory.media_type === "video" && activeStory.video ? (
+                  <StoryVideo key={activeStory.id} uri={resolveMediaUrl(activeStory.video)!} />
+                ) : activeStory.image ? (
+                  <Image source={{ uri: resolveMediaUrl(activeStory.image)! }} style={styles.storyMedia} resizeMode="contain" />
+                ) : (
+                  <View style={styles.storyMediaFallback}><Ionicons name="images-outline" size={40} color="#FFFFFF" /></View>
+                )}
+                <View style={styles.storyTopOverlay}>
+                  <View style={styles.storyProgressRow}>
+                    {activeStoryGroup.media.map((story, index) => (
+                      <View key={story.id} style={styles.storyProgressTrack}>
+                        <View style={[styles.storyProgressFill, index <= activeStoryIndex && styles.storyProgressComplete]} />
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.storyArtistHeader}>
+                    {activeStoryGroup.artistAvatar ? (
+                      <Image source={{ uri: resolveMediaUrl(activeStoryGroup.artistAvatar)! }} style={styles.storyHeaderAvatar} />
+                    ) : (
+                      <View style={styles.storyHeaderAvatarFallback}><Text style={styles.storyHeaderInitial}>{activeStoryGroup.artistName.slice(0, 1).toUpperCase()}</Text></View>
+                    )}
+                    <Text style={styles.storyArtistName} numberOfLines={1}>{activeStoryGroup.artistName}</Text>
+                    <Text style={styles.storyPublishedAt}>{formatStoryAge(activeStory.created_at, t)}</Text>
+                    <Pressable onPress={() => setActiveStoryArtistId(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("closeStory")}>
+                      <Ionicons name="close" size={28} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.storyPreviousArea}
+                  onPress={() => {
+                    if (activeStoryIndex > 0) setActiveStoryIndex((index) => index - 1);
+                    else setActiveStoryArtistId(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("previousStory")}
+                />
+                <Pressable
+                  style={styles.storyNextArea}
+                  onPress={() => {
+                    if (activeStoryIndex < activeStoryGroup.media.length - 1) setActiveStoryIndex((index) => index + 1);
+                    else setActiveStoryArtistId(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("nextStory")}
+                />
+                <View style={styles.storyBottomOverlay} pointerEvents="box-none">
+                  {activeStory.caption ? <Text style={styles.storyCaption}>{activeStory.caption}</Text> : null}
+                  <View style={styles.storyActions}>
+                    <Pressable
+                      style={styles.storyActionButton}
+                      onPress={() => void handleToggleStoryLike()}
+                      disabled={storyLikeSaving}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t("likeStory")} ${activeStory.like_count}`}
+                    >
+                      <Ionicons name={activeStory.liked_by_me ? "heart" : "heart-outline"} size={21} color={activeStory.liked_by_me ? "#FF6B78" : "#FFFFFF"} />
+                      <Text style={styles.storyActionText}>{activeStory.like_count}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.storyActionButton}
+                      onPress={() => void openStoryComments()}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t("commentOnStory")} ${activeStory.comments_count}`}
+                    >
+                      <Ionicons name="chatbubble-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.storyActionText}>{activeStory.comments_count}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.storyActionButton}
+                      onPress={shareActiveStory}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("shareStory")}
+                    >
+                      <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                  {storyActionError ? <Text style={styles.storyActionError}>{storyActionError}</Text> : null}
+                  <Pressable
+                    style={styles.storyShopButton}
+                    onPress={() => {
+                      const artistId = activeStoryGroup.artistId;
+                      setActiveStoryArtistId(null);
+                      router.push(`/artist/${artistId}`);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.storyShopText}>{t("shopThisArtist")}</Text>
+                    <Ionicons name="arrow-forward" size={16} color={colors.accentText} />
+                  </Pressable>
+                  {storyCommentsVisible ? (
+                    <View style={styles.storyCommentsPanel}>
+                      {storyCommentsLoading ? (
+                        <ActivityIndicator size="small" color={colors.accent} />
+                      ) : storyComments.length ? (
+                        <ScrollView style={styles.storyCommentsList} nestedScrollEnabled>
+                          {storyComments.map((comment) => (
+                            <View key={comment.id} style={styles.storyComment}>
+                              <Text style={styles.storyCommentAuthor}>{comment.username}</Text>
+                              <Text style={styles.storyCommentBody}>{comment.text}</Text>
+                              <Text style={styles.storyCommentAge}>{formatStoryAge(comment.created_at, t)}</Text>
+                            </View>
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <Text style={styles.storyCommentsEmpty}>{t("storyCommentsEmpty")}</Text>
+                      )}
+                      <View style={styles.storyCommentComposer}>
+                        <TextInput
+                          style={styles.storyCommentInput}
+                          value={storyCommentText}
+                          onChangeText={setStoryCommentText}
+                          placeholder={t("storyCommentPlaceholder")}
+                          placeholderTextColor="rgba(255,255,255,0.65)"
+                          maxLength={500}
+                          editable={!storyCommentSending}
+                          returnKeyType="send"
+                          onSubmitEditing={() => void submitStoryComment()}
+                        />
+                        <Pressable
+                          onPress={() => void submitStoryComment()}
+                          disabled={!storyCommentText.trim() || storyCommentSending}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("sendStoryComment")}
+                        >
+                          {storyCommentSending
+                            ? <ActivityIndicator size="small" color="#FFFFFF" />
+                            : <Ionicons name="send" size={19} color={storyCommentText.trim() ? "#FFFFFF" : "rgba(255,255,255,0.45)"} />}
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </Modal>
+
         {loading ? (
           <View style={styles.skeletonGrid}>
             {Array.from({ length: 6 }).map((_, index) => (
@@ -500,6 +843,44 @@ export default function GalleryScreen() {
                       </Text>
                       <Ionicons name="arrow-forward" size={14} color={colors.accentText} style={{ marginLeft: 4 }} />
                     </Pressable>
+                  </View>
+                )}
+                {!debouncedSearch && !selectedCategory && !selectedRegion && (
+                  <View style={styles.storiesSection}>
+                    <Text style={styles.sectionTitle}>{t("studioStoriesTitle")}</Text>
+                    {storyArtists.length ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRail}>
+                        {storyArtists.map((artist) => (
+                          <Pressable
+                            key={artist.artistId}
+                            style={styles.storyArtistButton}
+                            onPress={() => {
+                              setActiveStoryArtistId(artist.artistId);
+                              setActiveStoryIndex(0);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={t("viewArtistStudioStories", { artist: artist.artistName })}
+                          >
+                            <View style={styles.storyRing}>
+                              {artist.artistAvatar ? (
+                                <Image source={{ uri: resolveMediaUrl(artist.artistAvatar)! }} style={styles.storyAvatar} />
+                              ) : (
+                                <View style={styles.storyAvatarFallback}><Text style={styles.storyAvatarInitial}>{artist.artistName.slice(0, 1).toUpperCase()}</Text></View>
+                              )}
+                              {artist.media.some((story) => story.media_type === "video") && (
+                                <View style={styles.storyVideoBadge}><Ionicons name="play" size={10} color="#FFFFFF" /></View>
+                              )}
+                            </View>
+                            <Text style={styles.storyArtistLabel} numberOfLines={1}>{artist.artistName}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    ) : (
+                      <View style={styles.storiesEmpty}>
+                        <Ionicons name="camera-outline" size={19} color={colors.textMuted} />
+                        <Text style={styles.storiesEmptyText}>{t("studioStoriesEmpty")}</Text>
+                      </View>
+                    )}
                   </View>
                 )}
                 {!debouncedSearch && !selectedCategory && !selectedRegion && (() => {
@@ -848,6 +1229,51 @@ function createStyles(
     featuredTitle: { color: "#FFFFFF", fontFamily: fonts.display, fontSize: 21, fontWeight: "700", marginTop: 4 },
     featuredArtist: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 3 },
     sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginBottom: 9 },
+    storiesSection: { marginBottom: 16 },
+    storiesRail: { gap: 14, paddingVertical: 3, paddingHorizontal: 2 },
+    storyArtistButton: { width: 70, alignItems: "center", gap: 5 },
+    storyRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: colors.accent, padding: 3, position: "relative" },
+    storyAvatar: { width: "100%", height: "100%", borderRadius: 28 },
+    storyAvatarFallback: { width: "100%", height: "100%", borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+    storyAvatarInitial: { color: colors.accent, fontSize: 21, fontWeight: "800" },
+    storyVideoBadge: { position: "absolute", right: -2, bottom: -1, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.background },
+    storyArtistLabel: { maxWidth: 70, color: colors.textMuted, fontSize: 10, fontWeight: "700", textAlign: "center" },
+    storiesEmpty: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface },
+    storiesEmptyText: { flex: 1, color: colors.textMuted, fontSize: 12 },
+    storyBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center", padding: 14 },
+    storyViewer: { width: "100%", height: "90%", maxWidth: 480, maxHeight: 850, borderRadius: 20, overflow: "hidden", backgroundColor: "#111111", position: "relative" },
+    storyMedia: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
+    storyMediaFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+    storyTopOverlay: { position: "absolute", top: 0, left: 0, right: 0, paddingTop: 12, paddingHorizontal: 12, backgroundColor: "rgba(0,0,0,0.35)" },
+    storyProgressRow: { flexDirection: "row", gap: 4, marginBottom: 12 },
+    storyProgressTrack: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.42)", overflow: "hidden" },
+    storyProgressFill: { width: 0, height: "100%", backgroundColor: "#FFFFFF" },
+    storyProgressComplete: { width: "100%" },
+    storyArtistHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingBottom: 10 },
+    storyHeaderAvatar: { width: 34, height: 34, borderRadius: 17 },
+    storyHeaderAvatarFallback: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+    storyHeaderInitial: { color: colors.accentText, fontWeight: "800" },
+    storyArtistName: { color: "#FFFFFF", fontSize: 14, fontWeight: "800", maxWidth: "48%" },
+    storyPublishedAt: { flex: 1, color: "rgba(255,255,255,0.78)", fontSize: 11 },
+    storyPreviousArea: { position: "absolute", top: 60, bottom: 110, left: 0, width: "35%" },
+    storyNextArea: { position: "absolute", top: 60, bottom: 110, right: 0, width: "65%" },
+    storyBottomOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, paddingTop: 36, gap: 10, backgroundColor: "rgba(0,0,0,0.62)" },
+    storyCaption: { color: "#FFFFFF", fontSize: 14, lineHeight: 20 },
+    storyActions: { flexDirection: "row", alignItems: "center", gap: 20 },
+    storyActionButton: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 36 },
+    storyActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+    storyActionError: { color: "#FFD4D4", fontSize: 12 },
+    storyShopButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, alignSelf: "stretch", minHeight: 46, borderRadius: 24, backgroundColor: colors.accent },
+    storyShopText: { color: colors.accentText, fontSize: 13, fontWeight: "800" },
+    storyCommentsPanel: { padding: 10, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", gap: 8 },
+    storyCommentsList: { maxHeight: 130 },
+    storyComment: { paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.2)" },
+    storyCommentAuthor: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+    storyCommentBody: { color: "#FFFFFF", fontSize: 12, marginTop: 2 },
+    storyCommentAge: { color: "rgba(255,255,255,0.65)", fontSize: 10, marginTop: 2 },
+    storyCommentsEmpty: { color: "rgba(255,255,255,0.8)", fontSize: 12, paddingVertical: 4 },
+    storyCommentComposer: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 22 },
+    storyCommentInput: { flex: 1, color: "#FFFFFF", fontSize: 13, paddingVertical: 8 },
     moodRow: { gap: 8, paddingBottom: 16 },
     moodChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: RADIUS.pill, paddingVertical: 9, paddingHorizontal: 12 },
     moodChipSelected: { borderColor: colors.accent, backgroundColor: colors.surface },
