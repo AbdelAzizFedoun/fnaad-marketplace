@@ -219,7 +219,7 @@ export default function SubscriptionPaymentCard({ onSuccess }: { onSuccess?: () 
             </TouchableOpacity>
             <Text style={styles.title}>{t("subscriptionPayWith")}</Text>
             <Text style={styles.subtitle}>
-              Enter an MTN or Orange Money number. CamPay routes the request to that network.
+              Enter an MTN or Orange Money number. 
             </Text>
 
             <View style={styles.formSection}>
