@@ -12,18 +12,18 @@ import { shadow, RADIUS } from "../components/shadow";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 
-const CATEGORIES = [
-  { value: "painting", label: "Peinture" },
-  { value: "drawing", label: "Dessin" },
-  { value: "abstract", label: "Art abstrait" },
-  { value: "sculpture", label: "Sculpture" },
-  { value: "portrait", label: "Portrait" },
-  { value: "home_design", label: "Home Design" },
-  { value: "contemporary", label: "Contemporary Art" },
-  { value: "calligraphy", label: "Calligraphy" },
-  { value: "artisan_crafts", label: "Artisan Crafts" },
-  { value: "hall_of_fame", label: "Hall of Fame" },
-  { value: "other", label: "Autre" },
+const CATEGORY_KEYS: { value: string; labelKey: string }[] = [
+  { value: "painting", labelKey: "categoryPainting" },
+  { value: "drawing", labelKey: "categoryDrawing" },
+  { value: "abstract", labelKey: "categoryAbstract" },
+  { value: "sculpture", labelKey: "categorySculpture" },
+  { value: "portrait", labelKey: "categoryPortrait" },
+  { value: "home_design", labelKey: "categoryHomeDesign" },
+  { value: "contemporary", labelKey: "categoryContemporary" },
+  { value: "calligraphy", labelKey: "categoryCalligraphy" },
+  { value: "artisan_crafts", labelKey: "categoryArtisanCrafts" },
+  { value: "hall_of_fame", labelKey: "categoryHallOfFame" },
+  { value: "other", labelKey: "categoryOther" },
 ];
 
 const MAX_IMAGES = 6;
@@ -123,14 +123,14 @@ export default function AddProductScreen() {
 
       if (productStatus === "pending") {
         Alert.alert(
-          "Artwork Submitted",
-          `"${title.trim()}" has been submitted for review. It will be published as soon as an administrator approves it.`,
+          t("artworkSubmittedTitle"),
+          t("artworkSubmittedMsg", { title: title.trim() }),
           [{ text: "OK", onPress: () => router.push("/my-products") }]
         );
       } else {
         Alert.alert(
-          "Artwork Published",
-          `"${title.trim()}" is now published!`,
+          t("artworkPublishedTitle"),
+          t("artworkPublishedMsg", { title: title.trim() }),
           [{ text: "OK", onPress: () => router.push("/my-products") }]
         );
       }
@@ -172,11 +172,11 @@ export default function AddProductScreen() {
           />
         </View>
 
-        <View style={styles.fieldGroup}><Text style={styles.label}>What feeling does this artwork bring?</Text><View style={styles.chipsWrap}>{MOODS.map((mood) => <Pressable key={mood} style={[styles.chip, moods.includes(mood) && styles.chipSelected]} onPress={() => setMoods((current) => current.includes(mood) ? current.filter((value) => value !== mood) : [...current, mood])}><Text style={[styles.chipText, moods.includes(mood) && styles.chipTextSelected]}>{mood.replace("_", " ")}</Text></Pressable>)}</View><Text style={styles.helper}>Choose up to three moods to help visitors discover your artwork.</Text></View>
+        <View style={styles.fieldGroup}><Text style={styles.label}>{t("whatFeelingPrompt")}</Text><View style={styles.chipsWrap}>{MOODS.map((mood) => <Pressable key={mood} style={[styles.chip, moods.includes(mood) && styles.chipSelected]} onPress={() => setMoods((current) => current.includes(mood) ? current.filter((value) => value !== mood) : [...current, mood])}><Text style={[styles.chipText, moods.includes(mood) && styles.chipTextSelected]}>{t(`mood_${mood}`) || mood.replace("_", " ")}</Text></Pressable>)}</View><Text style={styles.helper}>{t("whatFeelingHelper")}</Text></View>
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t("creationMethodLabel")}</Text>
-          <View style={styles.chipsWrap}>{CREATION_METHODS.map((method) => <Pressable key={method} style={[styles.chip, creationMethod === method && styles.chipSelected]} onPress={() => setCreationMethod(method)}><Text style={[styles.chipText, creationMethod === method && styles.chipTextSelected]}>{method.replace("_", " ")}</Text></Pressable>)}</View>
+          <View style={styles.chipsWrap}>{CREATION_METHODS.map((method) => <Pressable key={method} style={[styles.chip, creationMethod === method && styles.chipSelected]} onPress={() => setCreationMethod(method)}><Text style={[styles.chipText, creationMethod === method && styles.chipTextSelected]}>{t(`method_${method}`) || method.replace("_", " ")}</Text></Pressable>)}</View>
           <Text style={styles.helper}>{t("passportHint")}</Text>
         </View>
 
@@ -209,14 +209,14 @@ export default function AddProductScreen() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t("categoryField")}</Text>
           <View style={styles.chipsWrap}>
-            {CATEGORIES.map((c) => (
+            {CATEGORY_KEYS.map((c) => (
               <Pressable
                 key={c.value}
                 style={[styles.chip, category === c.value && styles.chipSelected]}
                 onPress={() => setCategory(c.value)}
               >
                 <Text style={[styles.chipText, category === c.value && styles.chipTextSelected]}>
-                  {c.label}
+                  {t(c.labelKey) || c.value}
                 </Text>
               </Pressable>
             ))}

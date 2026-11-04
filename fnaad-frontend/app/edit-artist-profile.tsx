@@ -14,6 +14,7 @@ import {
   unwrapList,
 } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import ScreenHeader from "../components/ScreenHeader";
 
 type StudioMedia = {
@@ -49,6 +50,7 @@ type StudioMediaAsset = Pick<ImagePicker.ImagePickerAsset, "uri" | "fileName" | 
 
 export default function EditArtistProfileScreen() {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
   const [brandName, setBrandName] = useState("");
   const [practice, setPractice] = useState("");
@@ -80,20 +82,31 @@ export default function EditArtistProfileScreen() {
         setStoryAnalyticsError("");
       })
       .catch((error) => {
-        setStoryAnalyticsError(error?.response?.data?.detail || "Unable to load story analytics. Please try again.");
+        setStoryAnalyticsError(error?.response?.data?.detail || t("genericError"));
       })
       .finally(() => setStoryAnalyticsLoading(false));
   };
 
-  useEffect(() => { getMyArtistProfile().then(({ data }) => {
-    setBrandName(data.brand_name || ""); setPractice(data.artistic_practice || ""); setBio(data.bio || "");
-    setInstagram(data.instagram_handle || ""); setPortfolioUrl(data.portfolio_url || ""); setRegion(data.region_display || data.region || ""); setCurrentAvatar(data.avatar || null); setNationalId(data.national_id_number || "");
-  }).catch(() => Alert.alert("Unable to load profile", "Please try again.")).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    getMyArtistProfile()
+      .then(({ data }) => {
+        setBrandName(data.brand_name || "");
+        setPractice(data.artistic_practice || "");
+        setBio(data.bio || "");
+        setInstagram(data.instagram_handle || "");
+        setPortfolioUrl(data.portfolio_url || "");
+        setRegion(data.region_display || data.region || "");
+        setCurrentAvatar(data.avatar || null);
+        setNationalId(data.national_id_number || "");
+      })
+      .catch(() => Alert.alert(t("genericError"), t("reviewDetailsHint")))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     getMyStudioPhotos()
       .then(({ data }) => setStudioPhotos(unwrapList<StudioMedia>(data)))
-      .catch(() => Alert.alert("Unable to load Studio media", "Please try again."))
+      .catch(() => Alert.alert(t("couldNotAddStudioMedia"), t("reviewDetailsHint")))
       .finally(() => setStudioLoading(false));
   }, []);
 
@@ -103,7 +116,7 @@ export default function EditArtistProfileScreen() {
 
   const pickAvatar = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return Alert.alert("Photo permission needed", "Allow photo access to choose your storefront photo.");
+    if (!permission.granted) return Alert.alert(t("photoPermissionNeeded"), t("photoPermissionStorefrontHint"));
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.75 });
     if (!result.canceled) setNewAvatar(result.assets[0]);
   };
@@ -111,7 +124,7 @@ export default function EditArtistProfileScreen() {
   const pickStudioPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Photo permission needed", "Allow photo access to add a studio photo.");
+      Alert.alert(t("photoPermissionNeeded"), t("photoPermissionStudioHint"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -124,12 +137,12 @@ export default function EditArtistProfileScreen() {
 
   const pickStudioVideo = async () => {
     if (studioPhotos.filter((media) => media.media_type === "video").length >= 3) {
-      Alert.alert("Video limit reached", "You can add up to three Studio videos.");
+      Alert.alert(t("videoLimitReached"), t("videoLimitHint"));
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Media permission needed", "Allow media access to add a Studio video.");
+      Alert.alert(t("mediaPermissionNeeded"), t("mediaPermissionStudioVideoHint"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -140,7 +153,7 @@ export default function EditArtistProfileScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     if (asset.duration != null && asset.duration > 180_000) {
-      Alert.alert("Video is too long", "Studio videos must be three minutes or shorter.");
+      Alert.alert(t("videoTooLong"), t("videoTooLongHint"));
       return;
     }
     setStudioMedia({ ...asset, type: "video" });
@@ -148,7 +161,7 @@ export default function EditArtistProfileScreen() {
 
   const saveStudioMedia = async () => {
     if (!studioMedia) {
-      Alert.alert("Choose media", "Select a studio photo or video first.");
+      Alert.alert(t("chooseMediaFirst"), t("chooseMediaFirstHint"));
       return;
     }
     setStudioSaving(true);
@@ -161,8 +174,8 @@ export default function EditArtistProfileScreen() {
     } catch (error: any) {
       const message = error?.response?.data?.video?.[0]
         || error?.response?.data?.detail
-        || "Please try again.";
-      Alert.alert("Could not add Studio media", message);
+        || t("reviewDetailsHint");
+      Alert.alert(t("couldNotAddStudioMedia"), message);
     } finally {
       setStudioSaving(false);
     }
@@ -176,19 +189,17 @@ export default function EditArtistProfileScreen() {
           setStudioPhotos((current) => current.filter((item) => item.id !== photo.id));
           refreshStoryAnalytics();
         })
-        .catch((error: any) => Alert.alert("Could not remove Studio media", error?.response?.data?.detail || "Please try again."))
+        .catch((error: any) => Alert.alert(t("couldNotRemoveStudioMedia"), error?.response?.data?.detail || t("reviewDetailsHint")))
         .finally(() => setDeletingStudioPhotoId(null));
     };
-    const mediaName = photo.media_type === "video" ? "video" : "photo";
-    const confirmation = `This ${mediaName} will no longer appear on your public profile.`;
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(`Remove Studio ${mediaName}? ${confirmation}`)) remove();
+      if (typeof window !== "undefined" && window.confirm(`${t("removeStudioMediaTitle")} ${t("removeStudioMediaConfirm")}`)) remove();
       return;
     }
-    Alert.alert(`Remove Studio ${mediaName}?`, confirmation, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("removeStudioMediaTitle"), t("removeStudioMediaConfirm"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("remove"),
         style: "destructive",
         onPress: remove,
       },
@@ -196,117 +207,153 @@ export default function EditArtistProfileScreen() {
   };
 
   const save = async () => {
-    if (!brandName.trim()) return Alert.alert("Storefront name required", "Add the name customers will see for your art.");
-    if (portfolioUrl.trim() && !/^http?:\/\//i.test(portfolioUrl.trim())) return Alert.alert("Portfolio link", "Start your portfolio link with http://");
+    if (!brandName.trim()) return Alert.alert(t("storefrontNameRequired"), t("storefrontNameRequiredHint"));
+    if (portfolioUrl.trim() && !/^https?:\/\//i.test(portfolioUrl.trim())) return Alert.alert(t("portfolioLinkInvalid"), t("portfolioLinkInvalidHint"));
     setSaving(true);
     try {
       await updateMyArtistProfile({ brand_name: brandName.trim(), artistic_practice: practice.trim(), bio: bio.trim(), instagram_handle: instagram.trim().replace(/^@/, ""), portfolio_url: portfolioUrl.trim(), avatarUri: newAvatar?.uri || null, national_id_number: nationalId.trim() });
-      setNewAvatar(null); setSuccess("Your storefront has been updated successfully."); setTimeout(() => setSuccess(""), 4500);
-    } catch (error: any) { Alert.alert("Could not save storefront", error?.response?.data?.detail || "Please review your details and try again."); }
-    finally { setSaving(false); }
+      setNewAvatar(null);
+      setSuccess(t("storefrontUpdatedSuccess"));
+      setTimeout(() => setSuccess(""), 4500);
+    } catch (error: any) {
+      Alert.alert(t("couldNotSaveStorefront"), error?.response?.data?.detail || t("reviewDetailsHint"));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <View style={styles.container}><ScreenHeader title="Storefront & artist bio" /><ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} /></View>;
+  if (loading) return <View style={styles.container}><ScreenHeader title={t("storefrontAndBioTitle")} /><ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} /></View>;
   const avatarUri = newAvatar?.uri || resolveMediaUrl(currentAvatar || undefined);
-  return <View style={styles.container}><ScreenHeader title="Storefront & artist bio" />
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      <Text style={styles.intro}>Build the public profile collectors see before they discover your work.</Text>
-      <View style={styles.previewCard}><Pressable style={styles.avatar} onPress={() => void pickAvatar()}>{avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <Ionicons name="image-outline" size={28} color={colors.textMuted} />}<View style={styles.camera}><Ionicons name="camera" size={13} color="#fff" /></View></Pressable><View style={{ flex: 1 }}><Text style={styles.previewName}>{brandName || "Your studio name"}</Text><Text style={styles.previewMeta}>{practice || "Your artistic practice"}{region ? ` · ${region}` : ""}</Text><Pressable onPress={() => void pickAvatar()}><Text style={styles.photoLink}>Change storefront photo</Text></Pressable></View></View>
-      {success ? <View style={styles.success}><Ionicons name="checkmark-circle" size={20} color="#1F7A45" /><Text style={styles.successText}>{success}</Text></View> : null}
-      <Text style={styles.section}>Your identity</Text>
-      <Text style={styles.label}>Storefront name *</Text><TextInput style={styles.field} value={brandName} onChangeText={setBrandName} placeholder="e.g. Atelier Ndam" placeholderTextColor={colors.textMuted} maxLength={120} />
-      <Text style={styles.label}>Artistic practice</Text><TextInput style={styles.field} value={practice} onChangeText={setPractice} placeholder="e.g. Contemporary painter and illustrator" placeholderTextColor={colors.textMuted} maxLength={120} />
-      <Text style={styles.label}>National ID Number (CNI)</Text><TextInput style={styles.field} value={nationalId} onChangeText={setNationalId} placeholder="At least 9 digits" placeholderTextColor={colors.textMuted} maxLength={20} keyboardType="number-pad" />
-      <Text style={styles.section}>Artist statement</Text><Text style={styles.hint}>Share your medium, inspiration, and what makes your work distinctive. Keep it clear and personal.</Text><TextInput style={[styles.field, styles.bio]} value={bio} onChangeText={setBio} placeholder="I create..." placeholderTextColor={colors.textMuted} multiline maxLength={600} textAlignVertical="top" /><Text style={styles.count}>{bio.length}/600</Text>
-      <Text style={styles.section}>Find me online</Text><Text style={styles.hint}>Optional links help collectors learn more about your work.</Text>
-      <Text style={styles.label}>Instagram</Text><TextInput style={styles.field} value={instagram} onChangeText={setInstagram} placeholder="yourhandle" placeholderTextColor={colors.textMuted} autoCapitalize="none" maxLength={60} />
-      <Text style={styles.label}>Portfolio website</Text><TextInput style={styles.field} value={portfolioUrl} onChangeText={setPortfolioUrl} placeholder="http://yourportfolio.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="url" />
-      <Text style={styles.section}>Your studio</Text>
-      <Text style={styles.hint}>New uploads appear as Stories on the home page for 24 hours. Every photo and video stays on your public Studio archive until you delete it.</Text>
-      <Text style={styles.section}>Story analytics</Text>
-      {storyAnalyticsLoading ? <ActivityIndicator color={colors.accent} /> : storyAnalyticsError ? (
-        <View style={styles.analyticsError}>
-          <Text style={styles.analyticsErrorText}>{storyAnalyticsError}</Text>
-          <Pressable onPress={refreshStoryAnalytics}><Text style={styles.analyticsRetry}>Retry</Text></Pressable>
-        </View>
-      ) : (
-        <View style={styles.analyticsCard}>
-          <View style={styles.analyticsSummaryRow}>
-            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.views_count || 0}</Text><Text style={styles.analyticsLabel}>Views</Text></View>
-            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.like_count || 0}</Text><Text style={styles.analyticsLabel}>Likes</Text></View>
-            <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.comments_count || 0}</Text><Text style={styles.analyticsLabel}>Comments</Text></View>
+  return (
+    <View style={styles.container}>
+      <ScreenHeader title={t("storefrontAndBioTitle")} />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <Text style={styles.intro}>{t("storefrontIntro")}</Text>
+        <View style={styles.previewCard}>
+          <Pressable style={styles.avatar} onPress={() => void pickAvatar()}>
+            {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} /> : <Ionicons name="image-outline" size={28} color={colors.textMuted} />}
+            <View style={styles.camera}><Ionicons name="camera" size={13} color="#fff" /></View>
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.previewName}>{brandName || t("yourStudioName")}</Text>
+            <Text style={styles.previewMeta}>{practice || t("yourArtisticPractice")}{region ? ` · ${region}` : ""}</Text>
+            <Pressable onPress={() => void pickAvatar()}><Text style={styles.photoLink}>{t("changeStorefrontPhoto")}</Text></Pressable>
           </View>
-          {storyAnalytics?.stories.map((story) => (
-            <View key={story.id} style={styles.analyticsStoryRow}>
-              <Text style={styles.analyticsStoryTitle} numberOfLines={1}>
-                {story.caption || (story.media_type === "video" ? "Studio video" : "Studio photo")}
-              </Text>
-              <Text style={styles.analyticsStoryCounts}>
-                {story.views_count} views · {story.like_count} likes · {story.comments_count} comments
-              </Text>
-            </View>
-          ))}
         </View>
-      )}
-      <Text style={styles.hint}>Share your creative space with photos and up to three videos, each no longer than three minutes.</Text>
-      <View style={styles.studioPickerRow}>
-        <Pressable style={styles.studioPicker} onPress={() => void pickStudioPhoto()}>
-          {studioMedia?.type === "image" ? <Image source={{ uri: studioMedia.uri }} style={styles.studioPreview} /> : <Ionicons name="camera-outline" size={26} color={colors.accent} />}
-          <Text style={styles.studioPickerText}>{studioMedia?.type === "image" ? "Change selected photo" : "Choose a photo"}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.studioPicker, studioPhotos.filter((media) => media.media_type === "video").length >= 3 && styles.studioPickerDisabled]}
-          onPress={() => void pickStudioVideo()}
-          disabled={studioPhotos.filter((media) => media.media_type === "video").length >= 3}
-        >
-          <Ionicons name={studioMedia?.type === "video" ? "videocam" : "videocam-outline"} size={26} color={colors.accent} />
-          <Text style={styles.studioPickerText}>
-            {studioMedia?.type === "video" ? "Change selected video" : `Choose a video (${studioPhotos.filter((media) => media.media_type === "video").length}/3)`}
-          </Text>
-        </Pressable>
-      </View>
-      {studioMedia ? (
-        <View>
-          <Text style={styles.hint}>
-            {studioMedia.type === "video"
-              ? `Selected video${studioMedia.duration != null ? ` · ${Math.ceil(studioMedia.duration / 1000)} sec` : ""}`
-              : "Selected studio photo"}
-          </Text>
-          <TextInput
-            style={styles.field}
-            value={studioCaption}
-            onChangeText={setStudioCaption}
-            placeholder="Caption (optional)"
-            placeholderTextColor={colors.textMuted}
-            maxLength={160}
-          />
-          <Pressable style={[styles.studioAddButton, studioSaving && { opacity: 0.65 }]} onPress={() => void saveStudioMedia()} disabled={studioSaving}>
-            <Text style={styles.studioAddText}>{studioSaving ? "Adding..." : "Add to Studio"}</Text>
+        {success ? <View style={styles.success}><Ionicons name="checkmark-circle" size={20} color="#1F7A45" /><Text style={styles.successText}>{success}</Text></View> : null}
+
+        <Text style={styles.section}>{t("yourIdentity")}</Text>
+        <Text style={styles.label}>{t("storefrontNameLabel")}</Text>
+        <TextInput style={styles.field} value={brandName} onChangeText={setBrandName} placeholder={t("storefrontNamePlaceholder")} placeholderTextColor={colors.textMuted} maxLength={120} />
+
+        <Text style={styles.label}>{t("artisticPracticeLabel")}</Text>
+        <TextInput style={styles.field} value={practice} onChangeText={setPractice} placeholder={t("artisticPracticePlaceholder")} placeholderTextColor={colors.textMuted} maxLength={120} />
+
+        <Text style={styles.label}>{t("nationalIdLabel")}</Text>
+        <TextInput style={styles.field} value={nationalId} onChangeText={setNationalId} placeholder={t("nationalIdPlaceholder")} placeholderTextColor={colors.textMuted} maxLength={20} keyboardType="number-pad" />
+
+        <Text style={styles.section}>{t("artistStatementLabel")}</Text>
+        <Text style={styles.hint}>{t("artistStatementHint")}</Text>
+        <TextInput style={[styles.field, styles.bio]} value={bio} onChangeText={setBio} placeholder={t("artistStatementPlaceholder")} placeholderTextColor={colors.textMuted} multiline maxLength={600} textAlignVertical="top" />
+        <Text style={styles.count}>{bio.length}/600</Text>
+
+        <Text style={styles.section}>{t("findMeOnline")}</Text>
+        <Text style={styles.hint}>{t("findMeOnlineHint")}</Text>
+        <Text style={styles.label}>{t("instagramLabel")}</Text>
+        <TextInput style={styles.field} value={instagram} onChangeText={setInstagram} placeholder="yourhandle" placeholderTextColor={colors.textMuted} autoCapitalize="none" maxLength={60} />
+
+        <Text style={styles.label}>{t("portfolioWebsiteLabel")}</Text>
+        <TextInput style={styles.field} value={portfolioUrl} onChangeText={setPortfolioUrl} placeholder="https://yourportfolio.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="url" />
+
+        <Text style={styles.section}>{t("yourStudioSection")}</Text>
+        <Text style={styles.hint}>{t("yourStudioHint")}</Text>
+
+        <Text style={styles.section}>{t("storyAnalyticsTitle")}</Text>
+        {storyAnalyticsLoading ? <ActivityIndicator color={colors.accent} /> : storyAnalyticsError ? (
+          <View style={styles.analyticsError}>
+            <Text style={styles.analyticsErrorText}>{storyAnalyticsError}</Text>
+            <Pressable onPress={refreshStoryAnalytics}><Text style={styles.analyticsRetry}>{t("retry")}</Text></Pressable>
+          </View>
+        ) : (
+          <View style={styles.analyticsCard}>
+            <View style={styles.analyticsSummaryRow}>
+              <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.views_count || 0}</Text><Text style={styles.analyticsLabel}>{t("storyViews")}</Text></View>
+              <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.like_count || 0}</Text><Text style={styles.analyticsLabel}>{t("storyLikes")}</Text></View>
+              <View style={styles.analyticsMetric}><Text style={styles.analyticsValue}>{storyAnalytics?.comments_count || 0}</Text><Text style={styles.analyticsLabel}>{t("storyComments")}</Text></View>
+            </View>
+            {storyAnalytics?.stories.map((story) => (
+              <View key={story.id} style={styles.analyticsStoryRow}>
+                <Text style={styles.analyticsStoryTitle} numberOfLines={1}>
+                  {story.caption || (story.media_type === "video" ? t("selectedVideo") : t("selectedStudioPhoto"))}
+                </Text>
+                <Text style={styles.analyticsStoryCounts}>
+                  {story.views_count} {t("storyViews").toLowerCase()} · {story.like_count} {t("storyLikes").toLowerCase()} · {story.comments_count} {t("storyComments").toLowerCase()}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.hint}>{t("studioPickerHint")}</Text>
+        <View style={styles.studioPickerRow}>
+          <Pressable style={styles.studioPicker} onPress={() => void pickStudioPhoto()}>
+            {studioMedia?.type === "image" ? <Image source={{ uri: studioMedia.uri }} style={styles.studioPreview} /> : <Ionicons name="camera-outline" size={26} color={colors.accent} />}
+            <Text style={styles.studioPickerText}>{studioMedia?.type === "image" ? t("changeSelectedPhoto") : t("chooseStudioPhoto")}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.studioPicker, studioPhotos.filter((media) => media.media_type === "video").length >= 3 && styles.studioPickerDisabled]}
+            onPress={() => void pickStudioVideo()}
+            disabled={studioPhotos.filter((media) => media.media_type === "video").length >= 3}
+          >
+            <Ionicons name={studioMedia?.type === "video" ? "videocam" : "videocam-outline"} size={26} color={colors.accent} />
+            <Text style={styles.studioPickerText}>
+              {studioMedia?.type === "video" ? t("changeSelectedVideo") : `${t("chooseStudioVideo")} (${studioPhotos.filter((media) => media.media_type === "video").length}/3)`}
+            </Text>
           </Pressable>
         </View>
-      ) : null}
-      <View style={styles.studioList}>
-        {studioLoading ? <ActivityIndicator color={colors.accent} /> : studioPhotos.length ? studioPhotos.map((photo) => (
-          <View key={photo.id} style={styles.studioPhotoCard}>
-            {photo.media_type === "video" && photo.video
-              ? <View style={[styles.studioPhotoImage, styles.studioVideoPlaceholder]}><Ionicons name="videocam" size={26} color={colors.accent} /></View>
-              : photo.image ? <Image source={{ uri: resolveMediaUrl(photo.image)! }} style={styles.studioPhotoImage} /> : null}
-            <View style={styles.studioPhotoDetails}>
-              <Text style={styles.studioPhotoCaption} numberOfLines={2}>
-                {photo.caption || (photo.media_type === "video" ? `Studio video${photo.duration_seconds != null ? ` · ${photo.duration_seconds}s` : ""}` : "Studio photo")}
-                {"\n"}
-                {Date.now() - new Date(photo.created_at).getTime() < 24 * 60 * 60 * 1000 ? "Story · expires from home after 24 hours" : "Permanent Studio archive"}
-              </Text>
-              <Pressable onPress={() => removeStudioPhoto(photo)} disabled={deletingStudioPhotoId === photo.id} accessibilityRole="button" accessibilityLabel={`Remove studio ${photo.media_type}`}>
-                {deletingStudioPhotoId === photo.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="trash-outline" size={19} color="#B42318" />}
-              </Pressable>
-            </View>
+        {studioMedia ? (
+          <View>
+            <Text style={styles.hint}>
+              {studioMedia.type === "video"
+                ? `${t("selectedVideo")}${studioMedia.duration != null ? ` · ${Math.ceil(studioMedia.duration / 1000)}s` : ""}`
+                : t("selectedStudioPhoto")}
+            </Text>
+            <TextInput
+              style={styles.field}
+              value={studioCaption}
+              onChangeText={setStudioCaption}
+              placeholder={t("captionOptional")}
+              placeholderTextColor={colors.textMuted}
+              maxLength={160}
+            />
+            <Pressable style={[styles.studioAddButton, studioSaving && { opacity: 0.65 }]} onPress={() => void saveStudioMedia()} disabled={studioSaving}>
+              <Text style={styles.studioAddText}>{studioSaving ? t("addingStudioMedia") : t("addToStudio")}</Text>
+            </Pressable>
           </View>
-        )) : <Text style={styles.studioEmpty}>No studio media yet. Add a photo or video to share your creative space.</Text>}
-      </View>
-      <Pressable style={[styles.saveButton, saving && { opacity: 0.65 }]} onPress={save} disabled={saving}><Text style={styles.saveText}>{saving ? "Saving..." : "Save storefront"}</Text></Pressable>
-    </ScrollView>
-  </View>;
+        ) : null}
+        <View style={styles.studioList}>
+          {studioLoading ? <ActivityIndicator color={colors.accent} /> : studioPhotos.length ? studioPhotos.map((photo) => (
+            <View key={photo.id} style={styles.studioPhotoCard}>
+              {photo.media_type === "video" && photo.video
+                ? <View style={[styles.studioPhotoImage, styles.studioVideoPlaceholder]}><Ionicons name="videocam" size={26} color={colors.accent} /></View>
+                : photo.image ? <Image source={{ uri: resolveMediaUrl(photo.image)! }} style={styles.studioPhotoImage} /> : null}
+              <View style={styles.studioPhotoDetails}>
+                <Text style={styles.studioPhotoCaption} numberOfLines={2}>
+                  {photo.caption || (photo.media_type === "video" ? `${t("selectedVideo")}${photo.duration_seconds != null ? ` · ${photo.duration_seconds}s` : ""}` : t("selectedStudioPhoto"))}
+                  {"\n"}
+                  {Date.now() - new Date(photo.created_at).getTime() < 24 * 60 * 60 * 1000 ? t("storyExpiresHint") : t("permanentStudioArchive")}
+                </Text>
+                <Pressable onPress={() => removeStudioPhoto(photo)} disabled={deletingStudioPhotoId === photo.id} accessibilityRole="button" accessibilityLabel={t("remove")}>
+                  {deletingStudioPhotoId === photo.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="trash-outline" size={19} color="#B42318" />}
+                </Pressable>
+              </View>
+            </View>
+          )) : <Text style={styles.studioEmpty}>{t("noStudioMedia")}</Text>}
+        </View>
+        <Pressable style={[styles.saveButton, saving && { opacity: 0.65 }]} onPress={save} disabled={saving}><Text style={styles.saveText}>{saving ? t("savingStorefront") : t("saveStorefrontBtn")}</Text></Pressable>
+      </ScrollView>
+    </View>
+  );
 }
 
 function createStyles(colors: any) {
@@ -332,6 +379,17 @@ function createStyles(colors: any) {
     studioPicker: { flex: 1, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, borderRadius: 12, minHeight: 92, padding: 12, marginBottom: 10, alignItems: "center", justifyContent: "center", gap: 8 },
     studioPickerRow: { flexDirection: "row", gap: 10 },
     studioPickerDisabled: { opacity: 0.5 },
+    studioPreview: { width: "100%", height: 70, borderRadius: 8 },
+    studioPickerText: { color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
+    studioAddButton: { backgroundColor: colors.accent, borderRadius: 8, padding: 12, alignItems: "center", marginTop: 6, marginBottom: 14 },
+    studioAddText: { color: colors.accentText, fontWeight: "700", fontSize: 13 },
+    studioList: { gap: 10, marginTop: 6 },
+    studioPhotoCard: { flexDirection: "row", gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, alignItems: "center" },
+    studioPhotoImage: { width: 60, height: 60, borderRadius: 8 },
+    studioVideoPlaceholder: { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+    studioPhotoDetails: { flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    studioPhotoCaption: { color: colors.text, fontSize: 12, flex: 1, marginRight: 8, lineHeight: 17 },
+    studioEmpty: { color: colors.textMuted, fontSize: 12, fontStyle: "italic", textAlign: "center", paddingVertical: 14 },
     analyticsCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, backgroundColor: colors.surface, marginBottom: 14 },
     analyticsSummaryRow: { flexDirection: "row", justifyContent: "space-around", paddingBottom: 10 },
     analyticsMetric: { alignItems: "center", gap: 3 },
@@ -340,21 +398,10 @@ function createStyles(colors: any) {
     analyticsStoryRow: { paddingVertical: 9, borderTopWidth: 1, borderTopColor: colors.border, gap: 3 },
     analyticsStoryTitle: { color: colors.text, fontSize: 12, fontWeight: "700" },
     analyticsStoryCounts: { color: colors.textMuted, fontSize: 11 },
-    analyticsError: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, marginBottom: 14 },
-    analyticsErrorText: { flex: 1, color: "#B42318", fontSize: 12 },
-    analyticsRetry: { color: colors.accent, fontSize: 12, fontWeight: "800" },
-    studioPreview: { width: 76, height: 76, borderRadius: 9 },
-    studioPickerText: { color: colors.accent, fontSize: 13, fontWeight: "700" },
-    studioAddButton: { backgroundColor: colors.accent, padding: 12, borderRadius: 9, alignItems: "center", marginBottom: 14 },
-    studioAddText: { color: colors.accentText, fontSize: 13, fontWeight: "800" },
-    studioList: { gap: 10, marginTop: 6 },
-    studioPhotoCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 11, padding: 9 },
-    studioPhotoImage: { width: 72, height: 72, borderRadius: 8, backgroundColor: colors.border },
-    studioVideoPlaceholder: { alignItems: "center", justifyContent: "center" },
-    studioPhotoDetails: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-    studioPhotoCaption: { flex: 1, color: colors.text, fontSize: 13 },
-    studioEmpty: { color: colors.textMuted, fontSize: 12, lineHeight: 18, paddingVertical: 8 },
-    saveButton: { backgroundColor: colors.accent, padding: 14, borderRadius: 9, alignItems: "center", marginTop: 24 },
-    saveText: { color: colors.accentText, fontSize: 14, fontWeight: "800" },
+    analyticsError: { padding: 14, alignItems: "center", gap: 8 },
+    analyticsErrorText: { color: "#E7A0A0", fontSize: 12 },
+    analyticsRetry: { color: colors.accent, fontWeight: "700", fontSize: 12 },
+    saveButton: { backgroundColor: colors.accent, borderRadius: 12, padding: 16, alignItems: "center", marginTop: 24 },
+    saveText: { color: colors.accentText, fontWeight: "800", fontSize: 15 },
   });
 }

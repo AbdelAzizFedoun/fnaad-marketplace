@@ -91,17 +91,17 @@ const SHOWCASE_INFO = [
 
 const CATEGORIES = [
   { value: "", labelKey: "allCategories" },
-  { value: "painting", label: "Painting" },
-  { value: "drawing", label: "Drawing" },
-  { value: "abstract", label: "Abstract art" },
-  { value: "sculpture", label: "Sculpture" },
-  { value: "portrait", label: "Portrait" },
-  { value: "home_design", label: "Home Design" },
-  { value: "contemporary", label: "Contemporary Art" },
-  { value: "calligraphy", label: "Calligraphy" },
-  { value: "artisan_crafts", label: "Artisan Crafts" },
-  { value: "hall_of_fame", label: "Hall of Fame" },
-  { value: "other", label: "Other" },
+  { value: "painting", labelKey: "categoryPainting" },
+  { value: "drawing", labelKey: "categoryDrawing" },
+  { value: "abstract", labelKey: "categoryAbstract" },
+  { value: "sculpture", labelKey: "categorySculpture" },
+  { value: "portrait", labelKey: "categoryPortrait" },
+  { value: "home_design", labelKey: "categoryHomeDesign" },
+  { value: "contemporary", labelKey: "categoryContemporary" },
+  { value: "calligraphy", labelKey: "categoryCalligraphy" },
+  { value: "artisan_crafts", labelKey: "categoryArtisanCrafts" },
+  { value: "hall_of_fame", labelKey: "categoryHallOfFame" },
+  { value: "other", labelKey: "categoryOther" },
 ];
 
 const REGIONS = [
@@ -617,7 +617,7 @@ export default function GalleryScreen() {
                       onPress={() => setSelectedCategory(c.value)}
                     >
                       <Text style={[styles.filterChipText, selectedCategory === c.value && styles.filterChipTextSelected]}>
-                        {c.value === "" ? t((c.labelKey || c.label) as string) : c.label}
+                        {t(c.labelKey)}
                       </Text>
                     </Pressable>
                   ))}
@@ -898,8 +898,8 @@ export default function GalleryScreen() {
                     {showcaseItems.length > 1 && <View style={styles.showcaseDots}>{showcaseItems.map((_, index) => <Pressable key={index} onPress={() => setShowcaseIndex(index)} style={[styles.showcaseDot, index === showcaseIndex && styles.showcaseDotActive]} />)}</View>}
                   </View>;
                 })()}
-                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>FEATURED TODAY</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>by {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
-                {!debouncedSearch && <><Text style={styles.sectionTitle}>{t("findYourMood")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodRow}>{[{ label: "African heritage", value: "african_heritage", icon: "earth-outline" }, { label: "Calm", value: "calm", icon: "leaf-outline" }, { label: "Bold & modern", value: "bold", icon: "flash-outline" }, { label: "For my home", value: "home_decor", icon: "home-outline" }].map((mood) => <Pressable key={mood.value} style={[styles.moodChip, selectedMood === mood.value && styles.moodChipSelected]} onPress={() => setSelectedMood(selectedMood === mood.value ? "" : mood.value)}><Ionicons name={mood.icon as any} size={16} color={colors.accent} /><Text style={styles.moodText}>{mood.label}</Text></Pressable>)}</ScrollView><View style={styles.trustBanner}><Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.trustTitle}>{t("originalArtMaker")}</Text><Text style={styles.trustText}>{t("passportAvailable")}</Text></View></View></>}
+                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>{t("featuredToday")}</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>by {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
+                {!debouncedSearch && <><Text style={styles.sectionTitle}>{t("findYourMood")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodRow}>{[{ label: t("mood_african_heritage"), value: "african_heritage", icon: "earth-outline" }, { label: t("mood_calm"), value: "calm", icon: "leaf-outline" }, { label: t("mood_bold"), value: "bold", icon: "flash-outline" }, { label: t("mood_home_decor"), value: "home_decor", icon: "home-outline" }].map((mood) => <Pressable key={mood.value} style={[styles.moodChip, selectedMood === mood.value && styles.moodChipSelected]} onPress={() => setSelectedMood(selectedMood === mood.value ? "" : mood.value)}><Ionicons name={mood.icon as any} size={16} color={colors.accent} /><Text style={styles.moodText}>{mood.label}</Text></Pressable>)}</ScrollView><View style={styles.trustBanner}><Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.trustTitle}>{t("originalArtMaker")}</Text><Text style={styles.trustText}>{t("passportAvailable")}</Text></View></View></>}
               </View>
             }
             /*

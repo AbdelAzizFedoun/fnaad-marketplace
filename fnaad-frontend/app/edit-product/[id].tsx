@@ -15,17 +15,17 @@ import React from "react";
 type ExistingImage = { id: number; image: string; is_primary: boolean };
 
 const CATEGORIES = [
-  { value: "painting", label: "Peinture" },
-  { value: "drawing", label: "Dessin" },
-  { value: "abstract", label: "Art abstrait" },
-  { value: "sculpture", label: "Sculpture" },
-  { value: "portrait", label: "Portrait" },
-  { value: "home_design", label: "Home Design" },
-  { value: "contemporary", label: "Contemporary Art" },
-  { value: "calligraphy", label: "Calligraphy" },
-  { value: "artisan_crafts", label: "Artisan Crafts" },
-  { value: "hall_of_fame", label: "Hall of Fame" },
-  { value: "other", label: "Autre" },
+  { value: "painting", labelKey: "categoryPainting" },
+  { value: "drawing", labelKey: "categoryDrawing" },
+  { value: "abstract", labelKey: "categoryAbstract" },
+  { value: "sculpture", labelKey: "categorySculpture" },
+  { value: "portrait", labelKey: "categoryPortrait" },
+  { value: "home_design", labelKey: "categoryHomeDesign" },
+  { value: "contemporary", labelKey: "categoryContemporary" },
+  { value: "calligraphy", labelKey: "categoryCalligraphy" },
+  { value: "artisan_crafts", labelKey: "categoryArtisanCrafts" },
+  { value: "hall_of_fame", labelKey: "categoryHallOfFame" },
+  { value: "other", labelKey: "categoryOther" },
 ];
 
 const MAX_TOTAL_IMAGES = 6;
@@ -204,7 +204,7 @@ export default function EditProductScreen() {
                 onPress={() => setCategory(c.value)}
               >
                 <Text style={[styles.chipText, category === c.value && styles.chipTextSelected]}>
-                  {c.label}
+                  {t(c.labelKey) || c.value}
                 </Text>
               </Pressable>
             ))}

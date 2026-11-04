@@ -407,12 +407,12 @@ export default function ProductDetailScreen() {
               {product.artist_name}
             </Text>
             {product.artist_is_verified && <Ionicons name="checkmark-circle" size={16} color="#5FA779" style={{ marginLeft: 4 }} />}
-            {product.artist_is_verified && <Text style={[styles.artist, styles.verifiedLabel]}>Verified</Text>}
+            {product.artist_is_verified && <Text style={[styles.artist, styles.verifiedLabel]}>{t("verified")}</Text>}
             <Text style={styles.artistArrow}>  →</Text>
           </Pressable>
           <Pressable onPress={() => router.push(`/artist/${product.artist_id}`)} style={styles.artistProfileLink}>
             <Ionicons name="person-circle-outline" size={15} color={colors.accent} />
-            <Text style={styles.artistProfileLinkText}>View artist profile and bio</Text>
+            <Text style={styles.artistProfileLinkText}>{t("viewArtistProfileAndBio")}</Text>
           </Pressable>
           <Text style={styles.price}>{product.price_xaf} XAF</Text>
           <View style={styles.socialSummary}>
@@ -440,9 +440,9 @@ export default function ProductDetailScreen() {
           ) : null}
 
           <View style={styles.passportBox}>
-            <View style={styles.passportHeader}><Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.passportTitle}>FNAAD Originality Passport</Text><Text style={styles.passportSubtitle}>{product.verification_level === "verified" ? "FNAAD verified artwork" : "Artist-declared artwork"}</Text></View></View>
-            <View style={styles.passportDetails}><Text style={styles.passportDetail}>Creation: <Text style={styles.passportValue}>{(product.creation_method || "original").replace("_", " ")}</Text></Text><Text style={styles.passportDetail}>Evidence: <Text style={styles.passportValue}>{product.originality_evidence_count ? "Available" : "Not submitted"}</Text></Text></View>
-            {product.passport_token && <Text style={styles.passportId}>Passport ID · {product.passport_token.slice(0, 8).toUpperCase()}</Text>}
+            <View style={styles.passportHeader}><Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.passportTitle}>{t("fnaadOriginalityPassport")}</Text><Text style={styles.passportSubtitle}>{product.verification_level === "verified" ? t("fnaadVerifiedArtwork") : t("artistDeclaredArtwork")}</Text></View></View>
+            <View style={styles.passportDetails}><Text style={styles.passportDetail}>{t("passportCreation")} <Text style={styles.passportValue}>{t(`method_${product.creation_method || "original"}`) || (product.creation_method || "original").replace("_", " ")}</Text></Text><Text style={styles.passportDetail}>{t("passportEvidence")} <Text style={styles.passportValue}>{product.originality_evidence_count ? t("evidenceAvailable") : t("evidenceNotSubmitted")}</Text></Text></View>
+            {product.passport_token && <Text style={styles.passportId}>{t("passportIdLabel")} {product.passport_token.slice(0, 8).toUpperCase()}</Text>}
           </View>
 
           <View style={styles.paymentBox}>
