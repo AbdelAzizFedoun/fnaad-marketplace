@@ -5,10 +5,12 @@ import {
   getAdminSubscriptions,
   getPendingProducts,
   getReportedConversations,
+  getAdminSpotlightFeatures,
 } from "../services/api";
 
 type ReviewSummary = {
   pendingProducts: number;
+  pendingSpotlights: number;
   reportedConversations: number;
   unverifiedArtists: number;
   suspendedArtists: number;
@@ -19,6 +21,7 @@ export default function ReviewHub() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pendingProducts, setPendingProducts] = useState<any[]>([]);
+  const [spotlights, setSpotlights] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
@@ -26,12 +29,17 @@ export default function ReviewHub() {
   useEffect(() => {
     Promise.all([
       getPendingProducts(),
+      getAdminSpotlightFeatures(),
       getReportedConversations(),
       getAdminArtists(),
       getAdminSubscriptions(),
     ])
-      .then(([pendingRes, reportsRes, artistsRes, subscriptionsRes]) => {
+      .then(([pendingRes, spotlightRes, reportsRes, artistsRes, subscriptionsRes]) => {
         setPendingProducts(pendingRes.data || []);
+        const pendingSpots = (spotlightRes.data || []).filter(
+          (item: any) => !item.admin_approved && item.artist_approved
+        );
+        setSpotlights(pendingSpots);
         setReports(reportsRes.data || []);
         setArtists(artistsRes.data || []);
         setSubscriptions(subscriptionsRes.data || []);
@@ -46,6 +54,7 @@ export default function ReviewHub() {
 
   const summary = useMemo<ReviewSummary>(() => ({
     pendingProducts: pendingProducts.length,
+    pendingSpotlights: spotlights.length,
     reportedConversations: reports.length,
     unverifiedArtists: artists.filter((artist) => !artist.is_verified && !artist.is_suspended).length,
     suspendedArtists: artists.filter((artist) => artist.is_suspended).length,
@@ -54,10 +63,11 @@ export default function ReviewHub() {
       const delta = end - Date.now();
       return delta > 0 && delta <= 7 * 24 * 60 * 60 * 1000;
     }).length,
-  }), [artists, pendingProducts, reports, subscriptions]);
+  }), [artists, pendingProducts, spotlights, reports, subscriptions]);
 
   const totalOpenItems =
     summary.pendingProducts +
+    summary.pendingSpotlights +
     summary.reportedConversations +
     summary.unverifiedArtists +
     summary.suspendedArtists +
@@ -65,6 +75,7 @@ export default function ReviewHub() {
 
   const priorityRows = [
     { label: "Pending product approvals", value: summary.pendingProducts, to: "/moderation", tone: "gold" },
+    { label: "Pending Spotlight approvals", value: summary.pendingSpotlights, to: "/spotlight", tone: "gold" },
     { label: "Reported conversations", value: summary.reportedConversations, to: "/reports", tone: "danger" },
     { label: "Unverified artists", value: summary.unverifiedArtists, to: "/artists", tone: "text" },
     { label: "Suspended artists", value: summary.suspendedArtists, to: "/artists", tone: "danger" },
@@ -84,7 +95,7 @@ export default function ReviewHub() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         {priorityRows.map((item) => (
           <Link
             key={item.label}
@@ -128,6 +139,17 @@ export default function ReviewHub() {
                   name: product.title,
                   meta: product.artist_name,
                   link: "/moderation",
+                }))}
+              />
+            )}
+
+            {spotlights.slice(0, 3).length > 0 && (
+              <QueueSection
+                title="Pending Spotlight approvals"
+                items={spotlights.slice(0, 3).map((spot) => ({
+                  name: spot.product_title,
+                  meta: `Artist: ${spot.artist_name}`,
+                  link: "/spotlight",
                 }))}
               />
             )}

@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
-import { getPendingProducts } from "../services/api";
+import { getPendingProducts, getAdminSpotlightFeatures } from "../services/api";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: "DB" },
@@ -17,11 +17,19 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const { logout } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  const [spotlightCount, setSpotlightCount] = useState(0);
 
   useEffect(() => {
     const loadCount = () => {
       getPendingProducts()
         .then((res) => setPendingCount(res.data.length))
+        .catch(() => {});
+
+      getAdminSpotlightFeatures()
+        .then((res) => {
+          const pending = (res.data || []).filter((item: any) => !item.admin_approved && item.artist_approved);
+          setSpotlightCount(pending.length);
+        })
         .catch(() => {});
     };
     loadCount();
@@ -55,6 +63,11 @@ export default function Sidebar() {
             {item.to === "/moderation" && pendingCount > 0 && (
               <span className="ml-auto bg-danger text-white text-[10px] font-bold rounded-full px-2 py-0.5">
                 {pendingCount}
+              </span>
+            )}
+            {item.to === "/spotlight" && spotlightCount > 0 && (
+              <span className="ml-auto bg-gold text-black text-[10px] font-bold rounded-full px-2 py-0.5">
+                {spotlightCount}
               </span>
             )}
           </NavLink>

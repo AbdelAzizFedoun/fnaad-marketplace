@@ -679,27 +679,24 @@ class SendMessageView(generics.CreateAPIView):
         else:
             recipient = conversation.customer
 
+        sender_display = getattr(getattr(user, "artist_profile", None), "brand_name", None) or user.get_full_name() or user.username or "Un utilisateur"
         if message.message_type == Message.TYPE_IMAGE:
-            body = f"{user.username} sent you an image"
+            body = f"{sender_display} vous a envoyé une image"
         elif message.message_type == Message.TYPE_DOCUMENT:
-            body = f"{user.username} sent you a document"
+            body = f"{sender_display} vous a envoyé un document"
         elif message.message_type == Message.TYPE_LOCATION:
-            body = f"{user.username} sent you their location"
+            body = f"{sender_display} a partagé sa position"
+        elif message.message_type == getattr(Message, "TYPE_AUDIO", "audio"):
+            body = f"{sender_display} vous a envoyé un message vocal"
         else:
-            body = f"{user.username}: {message.text[:80]}" if message.text else f"{user.username} sent you a message"
+            body = f"{sender_display}: {message.text[:100]}" if message.text else f"{sender_display} vous a envoyé un message"
 
         create_notification(
             recipient,
-            title="New message",
+            title=f"Nouveau message de {sender_display}",
             body=body,
             notification_type="message",
-            data={"conversation_id": conversation.id},
-        )
-        send_push_notification(
-            recipient.expo_push_token,
-            title="New message",
-            body=body,
-            data={"type": "message", "conversation_id": conversation.id},
+            data={"conversation_id": conversation.id, "type": "message"},
         )
 
 
@@ -753,10 +750,13 @@ class ForwardMessageView(generics.GenericAPIView):
             is_forwarded=True,
         )
         recipient = conversation_artist_profile(target).user if target.customer_id == request.user.id else target.customer
-        send_push_notification(
-            recipient.expo_push_token, title="New message",
-            body=f"{request.user.username} forwarded you a message",
-            data={"type": "message", "conversation_id": target.id},
+        sender_display = getattr(getattr(request.user, "artist_profile", None), "brand_name", None) or request.user.get_full_name() or request.user.username or "Un utilisateur"
+        create_notification(
+            recipient,
+            title=f"Nouveau message de {sender_display}",
+            body=f"{sender_display} vous a transféré un message",
+            notification_type="message",
+            data={"conversation_id": target.id, "type": "message"},
         )
         return Response(MessageSerializer(forwarded, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
@@ -1538,6 +1538,15 @@ class CreateSpotlightRequestView(drf_views.APIView):
         feature.starts_at = None
         feature.expires_at = None
         feature.save(update_fields=["artist_approved", "admin_approved", "starts_at", "expires_at"])
+        from accounts.models import User
+        for admin_user in User.objects.filter(is_staff=True):
+            create_notification(
+                admin_user,
+                "Demande Spotlight en attente",
+                f"L'artiste {product.artist.brand_name} a demandé la mise en avant Spotlight de '{product.title}'.",
+                "spotlight_request",
+                {"feature_id": feature.id, "product_id": product.id}
+            )
         return Response({"id": feature.id, "product_id": product.id, "product_title": product.title, "artist_approved": False, "admin_approved": False}, status=201 if created else 200)
 
 
@@ -1549,6 +1558,15 @@ class ArtistSpotlightApprovalView(drf_views.APIView):
         feature.artist_approved = True
         feature.artist_approved_at = timezone.now()
         feature.save(update_fields=["artist_approved", "artist_approved_at"])
+        from accounts.models import User
+        for admin_user in User.objects.filter(is_staff=True):
+            create_notification(
+                admin_user,
+                "Approbation Spotlight par l'artiste",
+                f"L'artiste {feature.product.artist.brand_name} a approuvé la sélection Spotlight de '{feature.product.title}'. En attente de validation admin.",
+                "spotlight_request",
+                {"feature_id": feature.id, "product_id": feature.product_id}
+            )
         return Response({"approved": True, "detail": "Waiting for admin approval."})
 
 

@@ -11,17 +11,29 @@ const isExpoGo =
   Constants.appOwnership === "expo" ||
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
+const FALLBACK_PROJECT_ID = "ff4adf27-f236-4b71-a5f5-fc66d596dcd4";
+
 async function loadNotifications(): Promise<NotificationsModule | null> {
-  // Expo Go no longer includes Android remote-push support (removed in SDK 53+).
-  // Attempting to import or use it on Android in Expo Go throws an uncatchable exception.
+  if (Platform.OS === "web") return null;
   if (Platform.OS === "android" && isExpoGo) {
-    console.log("Push notifications are disabled in Android Expo Go (requires a development build).");
+    console.log("[PushNotifications] Push notifications disabled in Android Expo Go.");
     return null;
   }
   try {
-    return await import("expo-notifications");
+    const mod = await import("expo-notifications");
+    // Ensure notifications trigger banners and sounds while app is active or inactive
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    return mod;
   } catch (error) {
-    console.log("Push notifications are unavailable in this runtime:", error);
+    console.log("[PushNotifications] Failed to load expo-notifications:", error);
     return null;
   }
 }
@@ -41,42 +53,57 @@ export function usePushNotifications(isLoggedIn: boolean) {
       if (!Notifications || !active) return;
 
       try {
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: false,
-            shouldShowBanner: true,
-            shouldShowList: true,
-          }),
-        });
-
         const token = await registerForPushNotificationsAsync(Notifications);
         if (token && active) {
-          registerPushToken(token).catch((err: any) =>
-            console.log("Failed to register push token:", err)
-          );
+          console.log("[PushNotifications] Registered push token:", token);
+          registerPushToken(token)
+            .then(() => console.log("[PushNotifications] Token uploaded to backend successfully"))
+            .catch((err: any) =>
+              console.log("[PushNotifications] Failed to upload push token to backend:", err?.message || err)
+            );
         }
 
         notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-          console.log("Notification received:", notification);
+          console.log("[PushNotifications] Foreground notification received:", notification.request.content);
         });
 
         responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
           const data = response.notification.request.content.data;
-          console.log("Notification tapped:", data);
-          if (data) {
-            const followerId = Number(data.follower_id);
-            if (data.type === "artist_follow" && Number.isInteger(followerId) && followerId > 0) {
-              router.push({
-                pathname: "/follower/[id]",
-                params: { id: String(followerId) },
-              });
-            }
+          console.log("[PushNotifications] Notification response/tap:", data);
+          if (!data) return;
+
+          // Conversation / Message navigation
+          const convId = data.conversation_id || data.conversationId;
+          if (convId) {
+            router.push({
+              pathname: "/conversation/[id]",
+              params: { id: String(convId) },
+            });
+            return;
+          }
+
+          // Follower navigation
+          const followerId = Number(data.follower_id);
+          if (data.type === "artist_follow" && Number.isInteger(followerId) && followerId > 0) {
+            router.push({
+              pathname: "/follower/[id]",
+              params: { id: String(followerId) },
+            });
+            return;
+          }
+
+          // Product navigation
+          const prodId = data.product_id || data.productId;
+          if (prodId) {
+            router.push({
+              pathname: "/product/[id]",
+              params: { id: String(prodId) },
+            });
+            return;
           }
         });
       } catch (err) {
-        console.log("Notification setup error:", err);
+        console.log("[PushNotifications] Setup error:", err);
       }
     });
 
@@ -100,12 +127,15 @@ async function registerForPushNotificationsAsync(Notifications: NotificationsMod
       name: "default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7C",
+      lightColor: "#D4AF37",
+      sound: "default",
+      enableVibrate: true,
+      showBadge: true,
     });
   }
 
   if (!Device.isDevice) {
-    console.log("Push notifications require a physical device.");
+    console.log("[PushNotifications] Push notifications require a physical device.");
     return null;
   }
 
@@ -118,27 +148,20 @@ async function registerForPushNotificationsAsync(Notifications: NotificationsMod
   }
 
   if (!permissionGranted) {
-    console.log("Push notification permission denied.");
+    console.log("[PushNotifications] Push notification permission was not granted by user.");
     return null;
   }
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  if (!projectId) {
-    console.log("No EAS project ID found in app.json.");
-    return null;
-  }
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    (Constants as any).easConfig?.projectId ??
+    FALLBACK_PROJECT_ID;
 
   try {
     const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
     return tokenResponse.data;
   } catch (e: any) {
-    if (e?.message?.includes("googleServicesFile") || e?.message?.includes("FirebaseApp")) {
-      console.warn(
-        "[PushNotifications] Firebase is not configured (missing googleServicesFile in app.json). Android remote push notifications require google-services.json from Firebase."
-      );
-    } else {
-      console.log("Error getting push token:", e);
-    }
+    console.warn("[PushNotifications] Error fetching Expo push token:", e?.message || e);
     return null;
   }
 }

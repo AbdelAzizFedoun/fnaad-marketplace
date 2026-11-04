@@ -21,11 +21,14 @@ def send_push_notification(token, title, body, data=None):
         "title": title,
         "body": body,
         "sound": "default",
+        "channelId": "default",
+        "priority": "high",
+        "_displayInForeground": True,
         "data": data or {},
     }
 
     try:
-        print(f"[push] posting to {EXPO_PUSH_URL}")
+        print(f"[push] posting to {EXPO_PUSH_URL} with title='{title}'")
         response = requests.post(
             EXPO_PUSH_URL,
             json=payload,
@@ -36,9 +39,8 @@ def send_push_notification(token, title, body, data=None):
             timeout=5,
         )
         response.raise_for_status()
-        print(f"[push] success! response status: {response.status_code}")
+        print(f"[push] success! response status: {response.status_code}, response: {response.text}")
     except requests.RequestException as e:
-        # TODO: swap for proper logging once you have a logger configured
         print(f"[push] failed to send to {token}: {e}")
 
 
@@ -46,5 +48,6 @@ def create_notification(user, title, body, notification_type, data=None):
     notification = Notification.objects.create(
         user=user, title=title, body=body, notification_type=notification_type, data=data or {}
     )
-    send_push_notification(user.expo_push_token, title, body, {"type": notification_type, **(data or {})})
+    if user and getattr(user, "expo_push_token", None):
+        send_push_notification(user.expo_push_token, title, body, {"type": notification_type, **(data or {})})
     return notification
