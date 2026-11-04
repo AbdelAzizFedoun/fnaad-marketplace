@@ -89,22 +89,37 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ["status", "public_slug", "public_url", "created_at", "is_sold", "sold_at", "copy_of", "copy_confidence", "flagged_as_copy", "passport_token", "originality_evidence_count"]
 
     def get_originality_evidence_count(self, obj):
-        return obj.creation_evidence.count()
+        try:
+            return obj.creation_evidence.count()
+        except Exception:
+            return 0
 
     def get_average_rating(self, obj):
-        reviews = obj.reviews.all()
-        if not reviews:
+        try:
+            reviews = obj.reviews.all()
+            if not reviews:
+                return None
+            return round(sum(r.rating for r in reviews) / len(reviews), 1)
+        except Exception:
             return None
-        return round(sum(r.rating for r in reviews) / len(reviews), 1)
 
     def get_review_count(self, obj):
-        return obj.reviews.count()
+        try:
+            return obj.reviews.count()
+        except Exception:
+            return 0
 
     def get_like_count(self, obj):
-        return obj.favorited_by.count()
+        try:
+            return obj.favorited_by.count()
+        except Exception:
+            return 0
 
     def get_comment_count(self, obj):
-        return obj.comments.count()
+        try:
+            return obj.comments.count()
+        except Exception:
+            return 0
 
 
 class CreationEvidenceSerializer(serializers.ModelSerializer):
@@ -607,17 +622,26 @@ class ArtistPublicSerializer(serializers.ModelSerializer):
         ]
 
     def get_product_count(self, obj):
-        return obj.products.count()
+        try:
+            return obj.products.count()
+        except Exception:
+            return 0
 
     def get_follower_count(self, obj):
-        return obj.followers.count()
+        try:
+            return obj.followers.count()
+        except Exception:
+            return 0
 
     def get_studio_photos(self, obj):
-        return ArtistStudioPhotoSerializer(
-            obj.studio_photos.all(),
-            many=True,
-            context=self.context,
-        ).data
+        try:
+            return ArtistStudioPhotoSerializer(
+                obj.studio_photos.all(),
+                many=True,
+                context=self.context,
+            ).data
+        except Exception:
+            return []
 
 
 class ArtistPrivateSerializer(serializers.ModelSerializer):
@@ -664,7 +688,10 @@ class AdminArtistSerializer(serializers.ModelSerializer):
         ]
 
     def get_product_count(self, obj):
-        return obj.products.count()
+        try:
+            return obj.products.count()
+        except Exception:
+            return 0
 
 
 class ArtistProductsSerializer(serializers.ModelSerializer):
