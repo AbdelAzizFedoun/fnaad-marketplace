@@ -77,7 +77,6 @@ services:
   - type: web
     name: fnaad-admin
     runtime: static
-    plan: free
     rootDir: fnaad-admin
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -92,7 +91,6 @@ services:
   - type: web
     name: fnaad-web
     runtime: static
-    plan: free
     rootDir: fnaad-frontend
     buildCommand: npm install && npx expo export -p web
     staticPublishPath: dist
