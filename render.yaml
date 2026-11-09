@@ -28,7 +28,9 @@ services:
       - key: CORS_ALLOW_ALL_ORIGINS
         value: "true"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-web.onrender.com"
+        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com"
       - key: SECURE_SSL_REDIRECT
         value: "true"
       - key: SECURE_HSTS_SECONDS
@@ -87,9 +89,11 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://fnaad-api.onrender.com/api
+      - key: NODE_VERSION
+        value: "20"
 
   - type: web
-    name: fnaad-web
+    name: fnaad-art
     runtime: static
     rootDir: fnaad-frontend
     buildCommand: npm install && npx expo export -p web
@@ -103,3 +107,5 @@ services:
         value: https://fnaad-api.onrender.com/api
       - key: EXPO_PUBLIC_API_ORIGIN
         value: https://fnaad-api.onrender.com
+      - key: NODE_VERSION
+        value: "20"
