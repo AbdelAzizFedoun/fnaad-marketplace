@@ -78,7 +78,6 @@ services:
     name: fnaad-admin
     runtime: static
     plan: free
-    region: frankfurt
     rootDir: fnaad-admin
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -94,7 +93,6 @@ services:
     name: fnaad-web
     runtime: static
     plan: free
-    region: frankfurt
     rootDir: fnaad-frontend
     buildCommand: npm install && npx expo export -p web
     staticPublishPath: dist
