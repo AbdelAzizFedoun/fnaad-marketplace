@@ -83,6 +83,12 @@
       "expo-font",
       "expo-sharing",
       [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "FNAAD uses your microphone only during voice calls you start or answer."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
@@ -100,7 +106,8 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "@config-plugins/react-native-webrtc"
     ],
     "extra": {
       "router": {},

@@ -22,6 +22,7 @@ from .views import (
     product_public_view, SiteSettingsView,
     UnreadMessageCountView,
     ResumeCancelledConversationView, SpotlightListView, MySpotlightFeaturesView, CreateSpotlightRequestView, ArtistSpotlightApprovalView, AdminSpotlightFeaturesView, AdminSpotlightApprovalView,
+    VoiceCallStartView, ActiveVoiceCallView, VoiceCallStatusView, VoiceCallSignalsView,
 )
 from .admin_views import FlaggedCopiesListView, ConfirmCopyView, OverruleCopyView, EvidenceReviewListView, EvidenceReviewDecisionView
 
@@ -47,6 +48,10 @@ urlpatterns = [
     path("conversations/", MyConversationsListView.as_view(), name="conversation-list"),
     path("conversations/unread-count/", UnreadMessageCountView.as_view(), name="conversation-unread-count"),
     path("conversations/<int:pk>/", ConversationDetailView.as_view(), name="conversation-detail"),
+    path("conversations/<int:pk>/voice-calls/", VoiceCallStartView.as_view(), name="voice-call-start"),
+    path("conversations/<int:pk>/voice-calls/active/", ActiveVoiceCallView.as_view(), name="voice-call-active"),
+    path("voice-calls/<int:call_id>/status/", VoiceCallStatusView.as_view(), name="voice-call-status"),
+    path("voice-calls/<int:call_id>/signals/", VoiceCallSignalsView.as_view(), name="voice-call-signals"),
     path("conversations/<int:pk>/messages/", ConversationMessagesDeleteView.as_view(), name="conversation-messages-delete"),
     path("conversations/<int:pk>/status/", UpdateConversationStatusView.as_view(), name="conversation-status"),
     path("conversations/<int:pk>/read/", MarkConversationReadView.as_view(), name="conversation-read"),

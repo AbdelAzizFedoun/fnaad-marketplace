@@ -7,6 +7,9 @@ import { api, createStoryComment, getStoryComments, recordStoryView, resolveMedi
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useNetwork } from "../../context/NetworkContext";
+import OfflineBanner from "../../components/OfflineBanner";
+import { saveCatalogCache, getCatalogCache, saveFavoriteIdsCache, getFavoriteIdsCache } from "../../services/offlineCache";
 import LanguageSwitcher from "../../components/LanguageSwitcher";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { Ionicons } from "@expo/vector-icons";
@@ -84,9 +87,9 @@ function formatStoryAge(value: string, t: (key: string, params?: Record<string, 
 }
 
 const SHOWCASE_INFO = [
-  { eyebrow: "FROM FNAAD ARTISTS", title: "Art made by people.", subtitle: "Meet independent artists and find something meaningful to keep." },
-  { eyebrow: "ORIGINALITY MATTERS", title: "Discover with confidence.", subtitle: "Every featured artwork comes from a real artist and a real customer experience." },
-  { eyebrow: "COME BACK TOMORROW", title: "Fresh stories, every day.", subtitle: "See who the FNAAD community is celebrating right now." },
+  { eyebrowKey: "showcaseEyebrowArtists", titleKey: "showcaseTitleArtists", subtitleKey: "showcaseSubtitleArtists" },
+  { eyebrowKey: "showcaseEyebrowOriginality", titleKey: "showcaseTitleOriginality", subtitleKey: "showcaseSubtitleOriginality" },
+  { eyebrowKey: "showcaseEyebrowTomorrow", titleKey: "showcaseTitleTomorrow", subtitleKey: "showcaseSubtitleTomorrow" },
 ];
 
 const CATEGORIES = [
@@ -142,6 +145,7 @@ function SkeletonCard({ cardWidth, colors }: { cardWidth: DimensionValue; colors
 
 export default function GalleryScreen() {
   const router = useRouter();
+  const { isOnline, notifyOffline } = useNetwork();
   const { storyId: storyIdParam } = useLocalSearchParams<{ storyId?: string }>();
   const { loggedIn, initializing, user } = useAuth();
   const { t } = useLanguage();
@@ -283,8 +287,26 @@ export default function GalleryScreen() {
   }, [showcaseItems.length, showcaseIndex]);
   useEffect(() => { const timer = setInterval(() => setCountdownNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
+  useEffect(() => {
+    // Instant cache-first feed on app launch
+    getCatalogCache().then((cached) => {
+      if (cached && cached.length > 0) {
+        setProducts(cached);
+        setLoading(false);
+      }
+    });
+    getFavoriteIdsCache().then((cachedIds) => {
+      if (cachedIds && cachedIds.length > 0) {
+        setFavoriteIds(new Set(cachedIds));
+      }
+    });
+  }, []);
+
   const loadProducts = (region: string, category: string, search: string, sort: string) => {
-    setLoading(true);
+    // If we have cached products, keep them visible while loading fresh data
+    if (products.length === 0) {
+      setLoading(true);
+    }
     const params = new URLSearchParams();
     if (region) params.append("region", region);
     if (category) params.append("category", category);
@@ -296,8 +318,18 @@ export default function GalleryScreen() {
     setApiError(null);
     api
       .get(url, { skipAuth: true } as any)
-      .then((res) => { setProducts(unwrapList(res.data)); setApiError(null); })
-      .catch((err) => { console.log("API error:", err.message); setApiError(err.message || "Network error"); })
+      .then((res) => {
+        const list = unwrapList<Product>(res.data);
+        setProducts(list);
+        setApiError(null);
+        if (!region && !category && !search && !selectedMood && sort === "newest") {
+          saveCatalogCache(list);
+        }
+      })
+      .catch((err) => {
+        console.log("API error:", err.message);
+        setApiError(err.message || "Network error");
+      })
       .finally(() => setLoading(false));
   };
 
@@ -314,8 +346,12 @@ export default function GalleryScreen() {
     api
       .get(url, { skipAuth: true } as any)
       .then((res) => {
-        setProducts(unwrapList(res.data));
+        const list = unwrapList<Product>(res.data);
+        setProducts(list);
         setApiError(null);
+        if (!selectedRegion && !selectedCategory && !debouncedSearch && !selectedMood && selectedSort === "newest") {
+          saveCatalogCache(list);
+        }
       })
       .catch((err) => {
         console.log("API error:", err.message);
@@ -330,7 +366,11 @@ export default function GalleryScreen() {
       return;
     }
     getFavoriteIds()
-      .then((res) => setFavoriteIds(new Set(res.data.favorite_ids)))
+      .then((res) => {
+        const ids = res.data.favorite_ids || [];
+        setFavoriteIds(new Set(ids));
+        saveFavoriteIdsCache(ids);
+      })
       .catch((err) => console.log("Failed to load favorite ids:", err.message));
   };
 
@@ -343,6 +383,10 @@ export default function GalleryScreen() {
   const handleToggleFavorite = (productId: number) => {
     if (!loggedIn) {
       router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionLike") || "like artworks");
       return;
     }
     const wasFavorited = favoriteIds.has(productId);
@@ -380,6 +424,10 @@ export default function GalleryScreen() {
     if (!activeStory || storyLikeSaving) return;
     if (!loggedIn) {
       router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionLike") || "like");
       return;
     }
     setStoryLikeSaving(true);
@@ -421,6 +469,10 @@ export default function GalleryScreen() {
     if (!activeStory || !storyCommentText.trim() || storyCommentSending) return;
     if (!loggedIn) {
       router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionComment") || "post a comment");
       return;
     }
     setStoryCommentSending(true);
@@ -480,6 +532,7 @@ export default function GalleryScreen() {
 
   return (
     <View style={styles.container}>
+      <OfflineBanner onRetry={onRefresh} />
       <View style={styles.page}>
         {/* ── TOP NAVBAR: Profile/Login | FNAAD Art | Join & Language ── */}
         <View style={styles.headerRow}>
@@ -514,7 +567,7 @@ export default function GalleryScreen() {
             <NativeImage source={require("../../assets/logo-icon.png")} style={styles.brandLogo} resizeMode="contain" />
             <View style={styles.brandCopy}>
               <Text style={styles.brandName}>FNAAD</Text>
-              <Text style={styles.brandSubtitle}>ART MARKETPLACE</Text>
+              <Text style={styles.brandSubtitle}>{t("galleryTagline")}</Text>
             </View>
           </View>
 
@@ -527,7 +580,7 @@ export default function GalleryScreen() {
                 accessibilityLabel="Become an artist"
               >
                 <Ionicons name="color-palette-outline" size={14} color={colors.accentText} style={{ marginRight: 4 }} />
-                <Text style={styles.becomeArtistPillText}>Join</Text>
+                <Text style={styles.becomeArtistPillText}>{t("join") || "Join"}</Text>
               </Pressable>
             )}
             <LanguageSwitcher />
@@ -577,7 +630,7 @@ export default function GalleryScreen() {
         </ScrollView>
         <View style={styles.galleryStatus}>
           <View style={styles.galleryStatusDot} />
-          <Text style={styles.galleryStatusText}>Today at FNAAD · {spotlight.length || 0} artists in the 24h Spotlight</Text>
+          <Text style={styles.galleryStatusText}>{t("todayAtFnaad", { count: String(spotlight.length) })}</Text>
         </View>
 
         <Modal visible={filterVisible} animationType="slide" transparent onRequestClose={() => setFilterVisible(false)}>
@@ -825,10 +878,10 @@ export default function GalleryScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.artistInviteTitle}>
-                          {t("joinAsArtistBannerTitle") || "Are you an Artist or Artisan?"}
+                          {t("joinAsArtistBannerTitle")}
                         </Text>
                         <Text style={styles.artistInviteSub}>
-                          {t("joinAsArtistBannerSub") || "Open your mobile gallery, gain verified collectors & receive Mobile Money payouts."}
+                        {t("joinAsArtistBannerSub")}
                         </Text>
                       </View>
                     </View>
@@ -894,11 +947,11 @@ export default function GalleryScreen() {
                   return <View {...spotlightPanResponder.panHandlers} style={[styles.welcomeHero, spotlightItem && styles.welcomeHeroSpotlight, spotlightItem && styles.spotlightHero]}>
                     {spotlightItem && <Image source={require("../../assets/logo-full-transparent.png")} style={styles.spotlightWatermark} resizeMode="contain" />}
                     {primaryImage?.image ? <Image source={{ uri: resolveMediaUrl(primaryImage.image)! }} style={styles.heroSpotlightImage} resizeMode="cover" /> : null}
-                    <View style={styles.heroContent}><Text style={styles.heroEyebrow}>{spotlightItem ? "FNAAD SPOTLIGHT · TOP RATED" : infoItem?.eyebrow}</Text><Text style={styles.heroTitle}>{spotlightItem?.title || infoItem?.title}</Text><Text style={styles.heroSubtitle}>{spotlightItem ? `by ${spotlightItem.artist_name} · ${spotlightItem.average_rating?.toFixed(1) || "5.0"} ★` : infoItem?.subtitle}</Text><Pressable style={styles.heroButton} onPress={() => spotlightItem ? router.push(`/product/${spotlightItem.id}`) : setSelectedCategory("painting")}><Text style={styles.heroButtonText}>{spotlightItem ? "View artwork" : "Browse artworks"}</Text><Ionicons name="arrow-forward" size={15} color={colors.accentText} /></Pressable></View>
+                    <View style={styles.heroContent}><Text style={styles.heroEyebrow}>{spotlightItem ? t("spotlightHeroEyebrow") : infoItem ? t(infoItem.eyebrowKey) : ""}</Text><Text style={styles.heroTitle}>{spotlightItem?.title || (infoItem ? t(infoItem.titleKey) : "")}</Text><Text style={styles.heroSubtitle}>{spotlightItem ? `${t("byArtist")} ${spotlightItem.artist_name || t("unknownArtist")} · ${spotlightItem.average_rating?.toFixed(1) || "5.0"} ★` : infoItem ? t(infoItem.subtitleKey) : ""}</Text><Pressable style={styles.heroButton} onPress={() => spotlightItem ? router.push(`/product/${spotlightItem.id}`) : setSelectedCategory("painting")}><Text style={styles.heroButtonText}>{spotlightItem ? t("viewArtwork") : t("browseArtworks")}</Text><Ionicons name="arrow-forward" size={15} color={colors.accentText} /></Pressable></View>
                     {showcaseItems.length > 1 && <View style={styles.showcaseDots}>{showcaseItems.map((_, index) => <Pressable key={index} onPress={() => setShowcaseIndex(index)} style={[styles.showcaseDot, index === showcaseIndex && styles.showcaseDotActive]} />)}</View>}
                   </View>;
                 })()}
-                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>{t("featuredToday")}</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>by {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
+                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>{t("featuredToday")}</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>{t("byArtist")} {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
                 {!debouncedSearch && <><Text style={styles.sectionTitle}>{t("findYourMood")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodRow}>{[{ label: t("mood_african_heritage"), value: "african_heritage", icon: "earth-outline" }, { label: t("mood_calm"), value: "calm", icon: "leaf-outline" }, { label: t("mood_bold"), value: "bold", icon: "flash-outline" }, { label: t("mood_home_decor"), value: "home_decor", icon: "home-outline" }].map((mood) => <Pressable key={mood.value} style={[styles.moodChip, selectedMood === mood.value && styles.moodChipSelected]} onPress={() => setSelectedMood(selectedMood === mood.value ? "" : mood.value)}><Ionicons name={mood.icon as any} size={16} color={colors.accent} /><Text style={styles.moodText}>{mood.label}</Text></Pressable>)}</ScrollView><View style={styles.trustBanner}><Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.trustTitle}>{t("originalArtMaker")}</Text><Text style={styles.trustText}>{t("passportAvailable")}</Text></View></View></>}
               </View>
             }
@@ -906,19 +959,42 @@ export default function GalleryScreen() {
                   {selectedCategory ? ` · ${CATEGORIES.find((c) => c.value === selectedCategory)?.label}` : ""}
                   {selectedRegion ? ` · ${REGIONS.find((r) => r.value === selectedRegion)?.label}` : ""}
             */
-            ListEmptyComponent={() => (
-              <View style={styles.emptyWrap}>
-                <Ionicons name={apiError ? "wifi-outline" : "images-outline"} size={44} color={apiError ? "#E05252" : colors.textMuted} />
-                <Text style={[styles.emptyTitle, apiError ? { color: "#E05252" } : {}]}>
-                  {apiError ? `Cannot reach server:\n${apiError}` : debouncedSearch ? `No results for "${debouncedSearch}"` : t("noProducts")}
-                </Text>
-                {debouncedSearch && !apiError ? (
-                  <Pressable onPress={() => setSearchText("")} style={[styles.clearSearchAction, { borderColor: colors.border }]}>
-                    <Text style={styles.clearSearchActionText}>Clear search</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            )}
+            ListEmptyComponent={() => {
+              if (apiError) {
+                return (
+                  <View style={styles.emptyWrap}>
+                    <Ionicons name="cloud-offline-outline" size={48} color={colors.accent} />
+                    <Text style={[styles.emptyTitle, { color: colors.text, fontWeight: "700", fontSize: 16, marginTop: 12 }]}>
+                      {t("offlineTitle") || "You're offline"}
+                    </Text>
+                    <Text style={{ textAlign: "center", color: colors.textMuted, fontSize: 13, marginTop: 6, lineHeight: 18, maxWidth: 280 }}>
+                      {t("offlineDesc") || "No internet connection detected. Please check your network and try again."}
+                    </Text>
+                    <Pressable
+                      onPress={onRefresh}
+                      style={[styles.clearSearchAction, { marginTop: 16, backgroundColor: colors.accent, borderColor: colors.accent, paddingHorizontal: 20, paddingVertical: 8 }]}
+                    >
+                      <Text style={[styles.clearSearchActionText, { color: "#FFFFFF", fontWeight: "600" }]}>
+                        {t("retry") || "Retry"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              }
+              return (
+                <View style={styles.emptyWrap}>
+                  <Ionicons name="images-outline" size={44} color={colors.textMuted} />
+                  <Text style={styles.emptyTitle}>
+                    {debouncedSearch ? t("noSearchResults", { query: debouncedSearch }) : t("noProducts")}
+                  </Text>
+                  {debouncedSearch ? (
+                    <Pressable onPress={() => setSearchText("")} style={[styles.clearSearchAction, { borderColor: colors.border }]}>
+                      <Text style={styles.clearSearchActionText}>{t("clearSearchAction")}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            }}
             renderItem={({ item }) => {
               const primaryImage = item.images?.find((img) => img.is_primary) || item.images?.[0];
               const imageUrl = resolveMediaUrl(primaryImage?.thumbnail || primaryImage?.image);
@@ -942,7 +1018,7 @@ export default function GalleryScreen() {
                         </View>
                       </View>
                     )}
-                    {(item.verification_level === "verified" || (item.originality_evidence_count || 0) > 0) && <View style={styles.originalBadge}><Ionicons name="shield-checkmark" size={11} color="#FFFFFF" /><Text style={styles.originalBadgeText}>{item.verification_level === "verified" ? "FNAAD verified" : "Evidence available"}</Text></View>}
+                    {(item.verification_level === "verified" || (item.originality_evidence_count || 0) > 0) && <View style={styles.originalBadge}><Ionicons name="shield-checkmark" size={11} color="#FFFFFF" /><Text style={styles.originalBadgeText}>{item.verification_level === "verified" ? t("fnaadVerifiedShort") : t("evidenceAvailableShort")}</Text></View>}
                     <Pressable
                       style={styles.heartButton}
                       onPress={(e) => {

@@ -222,6 +222,47 @@ class Conversation(models.Model):
         return f"Commission Conversation: {self.customer.username} ↔ {self.commission_response.artist.brand_name} ({self.status})"
 
 
+class VoiceCall(models.Model):
+    STATUS_RINGING = "ringing"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_REJECTED = "rejected"
+    STATUS_ENDED = "ended"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = [(status, status.title()) for status in (
+        STATUS_RINGING, STATUS_ACCEPTED, STATUS_REJECTED, STATUS_ENDED, STATUS_EXPIRED,
+    )]
+
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="voice_calls")
+    caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="voice_calls_started")
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="voice_calls_received")
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_RINGING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_activity_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["conversation", "status"])]
+
+
+class VoiceCallSignal(models.Model):
+    TYPE_OFFER = "offer"
+    TYPE_ANSWER = "answer"
+    TYPE_CANDIDATE = "candidate"
+    TYPE_CHOICES = [(signal_type, signal_type.title()) for signal_type in (
+        TYPE_OFFER, TYPE_ANSWER, TYPE_CANDIDATE,
+    )]
+
+    call = models.ForeignKey(VoiceCall, on_delete=models.CASCADE, related_name="signals")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    signal_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    payload = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+
 class Message(models.Model):
     TYPE_TEXT = "text"
     TYPE_LOCATION = "location"

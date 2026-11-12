@@ -157,31 +157,31 @@ export default function AdminArtistsScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Storefront</Text>
+              <Text style={styles.sectionTitle}>{t("storefront") || "Storefront"}</Text>
               <Text style={styles.cardMeta}>{item.region_display} · {item.product_count} {t("artworksCount")}</Text>
-              {item.artistic_practice ? <Text style={styles.cardMeta}>Practice: {item.artistic_practice}</Text> : null}
-              {item.bio ? <Text style={styles.cardMeta}>Bio: {item.bio}</Text> : null}
+              {item.artistic_practice ? <Text style={styles.cardMeta}>{t("practice")}: {item.artistic_practice}</Text> : null}
+              {item.bio ? <Text style={styles.cardMeta}>{t("bio")}: {item.bio}</Text> : null}
               {item.instagram_handle ? <Text style={styles.cardMeta}>Instagram: @{item.instagram_handle}</Text> : null}
               {item.portfolio_url ? (
                 <Pressable onPress={() => router.push(item.portfolio_url)}>
-                  <Text style={styles.link}>Portfolio</Text>
+                  <Text style={styles.link}>{t("portfolio")}</Text>
                 </Pressable>
               ) : null}
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Contact & payments</Text>
+              <Text style={styles.sectionTitle}>{t("contactPayments")}</Text>
               <Text style={styles.cardMeta}>{item.user_email}</Text>
               <Text style={styles.cardMeta}>{item.user_phone}</Text>
-              <Text style={styles.cardMeta}>Mobile money: {item.mobile_money_provider} ({item.mobile_money_number})</Text>
+              <Text style={styles.cardMeta}>{t("mobileMoney")}: {item.mobile_money_provider} ({item.mobile_money_number})</Text>
               <Text style={styles.cardMeta}>CNI: {item.national_id_number}</Text>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Account</Text>
-              <Text style={styles.cardMeta}>Joined: {new Date(item.created_at).toLocaleDateString()}</Text>
-              {item.verified_at ? <Text style={styles.cardMeta}>Verified: {new Date(item.verified_at).toLocaleString()}</Text> : null}
-              {item.suspended_at ? <Text style={styles.cardMeta}>Suspended: {new Date(item.suspended_at).toLocaleString()}</Text> : null}
+              <Text style={styles.sectionTitle}>{t("accountSection")}</Text>
+              <Text style={styles.cardMeta}>{t("joined")}: {new Date(item.created_at).toLocaleDateString()}</Text>
+              {item.verified_at ? <Text style={styles.cardMeta}>{t("verifiedAt")}: {new Date(item.verified_at).toLocaleString()}</Text> : null}
+              {item.suspended_at ? <Text style={styles.cardMeta}>{t("suspendedAt")}: {new Date(item.suspended_at).toLocaleString()}</Text> : null}
             </View>
 
             {item.is_suspended && (

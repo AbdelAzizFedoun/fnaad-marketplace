@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { LanguageProvider } from "../context/LanguageContext";
 import { ThemeProvider } from "../context/ThemeContext";
+import { NetworkProvider } from "../context/NetworkContext";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 
 function AppContent() {
@@ -18,9 +19,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
+          <NetworkProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </NetworkProvider>
         </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>

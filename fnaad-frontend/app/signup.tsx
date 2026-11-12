@@ -103,14 +103,18 @@ export default function SignupScreen() {
       );
       router.push("/login");
     } catch (err: any) {
-      const data = err.response?.data;
-      if (typeof data === "object" && data !== null) {
-        const firstKey = Object.keys(data)[0];
-        const val = data[firstKey];
-        const message = Array.isArray(val) ? val.join(" ") : String(val);
-        setErrorMsg(`${firstKey}: ${message}`);
+      if (!err.response || err.code === "ERR_NETWORK" || err.message?.toLowerCase().includes("network")) {
+        setErrorMsg(t("serverUnreachable") || "You are offline. Please check your internet connection and try again.");
       } else {
-        setErrorMsg(err.message || "Registration failed. Please check your connection.");
+        const data = err.response?.data;
+        if (typeof data === "object" && data !== null) {
+          const firstKey = Object.keys(data)[0];
+          const val = data[firstKey];
+          const message = Array.isArray(val) ? val.join(" ") : String(val);
+          setErrorMsg(`${firstKey}: ${message}`);
+        } else {
+          setErrorMsg(err.message || t("signupError") || "Registration failed. Please check your connection.");
+        }
       }
     } finally {
       setLoading(false);

@@ -20,16 +20,34 @@ type AppNotification = {
 
 type NotificationFilter = "all" | "unread" | "orders" | "commissions" | "social" | "copyright";
 
-function formatRelativeTime(value: string): string {
+function localizedNotificationTitle(notification: AppNotification, t: (key: string) => string) {
+  const keys: Record<string, string> = {
+    favorite: "notificationNewLike",
+    story_like: "notificationNewLike",
+    comment: "notificationNewComment",
+    story_comment: "notificationNewComment",
+    artist_follow: "notificationNewFollower",
+    message: "notificationNewMessage",
+    artist_new_product: "notificationNewArtwork",
+    spotlight_approved: "notificationSpotlightApproved",
+    spotlight_requested: "notificationSpotlightRequested",
+    commission_response: "notificationNewCommissionResponse",
+    new_artwork_request: "notificationNewArtworkRequest",
+    copy_review: "notificationCopyReview",
+  };
+  return keys[notification.notification_type] ? t(keys[notification.notification_type]) : notification.title;
+}
+
+function formatRelativeTime(value: string, t: (key: string) => string): string {
   const date = new Date(value);
   const diffMs = Date.now() - date.getTime();
   const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "just now";
+  if (minutes < 1) return t("notificationJustNow");
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  if (days === 1) return "Yesterday";
+  if (days === 1) return t("notificationYesterdayShort");
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString([], { month: "numeric", day: "numeric" });
 }
@@ -90,10 +108,10 @@ export default function NotificationsScreen() {
     const startOfYesterday = startOfToday - 86400000;
     const startOfWeek = startOfToday - 6 * 86400000;
     const groups: { title: string; data: AppNotification[] }[] = [
-      { title: "Today", data: [] },
-      { title: "Yesterday", data: [] },
-      { title: "This week", data: [] },
-      { title: "Older", data: [] },
+      { title: t("notificationToday"), data: [] },
+      { title: t("notificationYesterday"), data: [] },
+      { title: t("notificationThisWeek"), data: [] },
+      { title: t("notificationOlder"), data: [] },
     ];
     for (const notification of sorted) {
       const time = new Date(notification.created_at).getTime();
@@ -103,7 +121,7 @@ export default function NotificationsScreen() {
       else groups[3].data.push(notification);
     }
     return groups.filter((group) => group.data.length > 0);
-  }, [filteredNotifications]);
+  }, [filteredNotifications, t]);
 
   const loadNotifications = useCallback(() => {
     if (requestInFlight.current) return requestInFlight.current;
@@ -112,7 +130,7 @@ export default function NotificationsScreen() {
         setNotifications(res.data);
         setError(null);
       })
-      .catch((err) => setError(err.response?.data?.detail || "Failed to load notifications"));
+      .catch((err) => setError(err.response?.data?.detail || t("notificationLoadError")));
     const trackedRequest = request.finally(() => {
       if (requestInFlight.current === trackedRequest) requestInFlight.current = null;
     });
@@ -229,7 +247,7 @@ export default function NotificationsScreen() {
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
             <Pressable onPress={loadNotifications} style={styles.retryBtn}>
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={styles.retryBtnText}>{t("retryNotifications")}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -245,12 +263,12 @@ export default function NotificationsScreen() {
         <View style={styles.toolbar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
             {[
-              { key: "all", label: "All" },
-              { key: "unread", label: "Unread" },
-              { key: "orders", label: "Orders" },
-              { key: "commissions", label: "Commissions" },
-              { key: "social", label: "Social" },
-              { key: "copyright", label: "Copyright" },
+              { key: "all", label: t("notificationAll") },
+              { key: "unread", label: t("notificationUnread") },
+              { key: "orders", label: t("notificationOrders") },
+              { key: "commissions", label: t("notificationCommissions") },
+              { key: "social", label: t("notificationSocial") },
+              { key: "copyright", label: t("notificationCopyright") },
             ].map((option) => {
               const selected = filter === option.key;
               return (
@@ -330,12 +348,12 @@ export default function NotificationsScreen() {
                   <View style={styles.notificationTopRow}>
                     <View style={styles.notificationTitleRow}>
                       <Text style={[styles.notificationTitle, { color: colors.text }]} numberOfLines={1}>
-                        {notification.title}
+                        {localizedNotificationTitle(notification, t)}
                       </Text>
                       {!notification.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />}
                     </View>
                     <Text style={[styles.notificationTime, { color: colors.textMuted }]}>
-                      {formatRelativeTime(notification.created_at)}
+                      {formatRelativeTime(notification.created_at, t)}
                     </Text>
                   </View>
                   <Text style={[styles.notificationBody, { color: colors.textMuted }]}>{notification.body}</Text>
@@ -347,7 +365,7 @@ export default function NotificationsScreen() {
                     deleteNotificationById(notification, index);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Delete ${notification.title}`}
+                  accessibilityLabel={`${t("deleteNotification")}: ${localizedNotificationTitle(notification, t)}`}
                 >
                   <Ionicons name="trash-outline" size={17} color={colors.textMuted} />
                 </Pressable>
@@ -363,7 +381,7 @@ export default function NotificationsScreen() {
             color={colors.textMuted}
           />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            {t("noNotifications") || "No notifications yet."}
+            {t("noNotifications")}
           </Text>
           </>
         )}

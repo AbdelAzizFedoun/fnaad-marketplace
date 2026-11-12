@@ -93,7 +93,7 @@ export default function AdminApproveScreen() {
               {allImages.length === 0 ? (
                 <View style={styles.noImageBox}>
                   <Ionicons name="image-outline" size={36} color={colors.textMuted} />
-                  <Text style={styles.noImageText}>No images uploaded</Text>
+                  <Text style={styles.noImageText}>{t("noImagesUploaded")}</Text>
                 </View>
               ) : allImages.length === 1 ? (
                 <Pressable onPress={() => setLightbox({ images: allImages, index: 0 })}>
@@ -104,7 +104,7 @@ export default function AdminApproveScreen() {
                   />
                   <View style={styles.imageBadge}>
                     <Ionicons name="expand-outline" size={12} color="#fff" />
-                    <Text style={styles.imageBadgeText}>Tap to enlarge</Text>
+                    <Text style={styles.imageBadgeText}>{t("tapToEnlarge")}</Text>
                   </View>
                 </Pressable>
               ) : (
@@ -120,7 +120,7 @@ export default function AdminApproveScreen() {
                           />
                           {img.is_primary && (
                             <View style={styles.primaryBadge}>
-                              <Text style={styles.primaryBadgeText}>Main</Text>
+                              <Text style={styles.primaryBadgeText}>{t("mainImage")}</Text>
                             </View>
                           )}
                         </View>

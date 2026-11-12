@@ -47,6 +47,24 @@ export const getAccessToken = () => storage.getItem(ACCESS_KEY);
 export const unwrapList = <T,>(data: T[] | { results: T[] }): T[] =>
   Array.isArray(data) ? data : data.results;
 
+type NetworkListener = (isOnline: boolean) => void;
+const networkListeners = new Set<NetworkListener>();
+
+export const subscribeToNetworkStatus = (listener: NetworkListener) => {
+  networkListeners.add(listener);
+  return () => {
+    networkListeners.delete(listener);
+  };
+};
+
+export const emitNetworkStatus = (isOnline: boolean) => {
+  networkListeners.forEach((cb) => {
+    try {
+      cb(isOnline);
+    } catch {}
+  });
+};
+
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 45000,
@@ -76,8 +94,19 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 });
 
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    emitNetworkStatus(true);
+    return response;
+  },
   async (error: AxiosError) => {
+    if (
+      !error.response ||
+      error.code === "ERR_NETWORK" ||
+      error.code === "ECONNABORTED" ||
+      error.message?.toLowerCase().includes("network")
+    ) {
+      emitNetworkStatus(false);
+    }
     const originalRequest = error.config as AuthRequestConfig | undefined;
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
@@ -329,6 +358,45 @@ export const fetchNgrokMedia = async (uri: string, signal: AbortSignal): Promise
 
 export const startConversation = (productId: number) =>
   api.post("/catalog/conversations/start/", { product: productId });
+
+export type VoiceCall = {
+  id: number;
+  conversation: number;
+  caller: number;
+  recipient: number;
+  status: "ringing" | "accepted" | "rejected" | "ended" | "expired";
+  created_at: string;
+};
+
+export type VoiceCallSignal = {
+  id: number;
+  signal_type: "offer" | "answer" | "candidate";
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export const startVoiceCall = (conversationId: number) =>
+  api.post<VoiceCall>(`/catalog/conversations/${conversationId}/voice-calls/`);
+
+export const getActiveVoiceCall = (conversationId: number) =>
+  api.get<VoiceCall | null>(`/catalog/conversations/${conversationId}/voice-calls/active/`);
+
+export const updateVoiceCallStatus = (
+  callId: number,
+  status: "accepted" | "rejected" | "ended",
+) => api.patch<VoiceCall>(`/catalog/voice-calls/${callId}/status/`, { status });
+
+export const getVoiceCallSignals = (callId: number, afterId: number) =>
+  api.get<VoiceCallSignal[]>(`/catalog/voice-calls/${callId}/signals/`, { params: { after_id: afterId } });
+
+export const sendVoiceCallSignal = (
+  callId: number,
+  signalType: VoiceCallSignal["signal_type"],
+  payload: Record<string, unknown>,
+) => api.post<VoiceCallSignal>(`/catalog/voice-calls/${callId}/signals/`, {
+  signal_type: signalType,
+  payload,
+});
 
 export const startCommissionConversation = (commissionResponseId: number) =>
   api.post("/catalog/conversations/start-commission/", { commission_response: commissionResponseId });

@@ -14,7 +14,7 @@ from django.conf import settings
 from rest_framework.exceptions import APIException, ValidationError
 import logging
 from datetime import timedelta
-from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature
+from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature, VoiceCall, VoiceCallSignal
 from social.models import Comment
 from social.models import Comment, Like
 from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer
@@ -652,6 +652,169 @@ class ConversationDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return conversations_visible_to_user(self.request.user)
+
+
+class VoiceCallSerializer(drf_serializers.ModelSerializer):
+    class Meta:
+        model = VoiceCall
+        fields = ["id", "conversation", "caller", "recipient", "status", "created_at"]
+        read_only_fields = fields
+
+
+class VoiceCallSignalSerializer(drf_serializers.ModelSerializer):
+    class Meta:
+        model = VoiceCallSignal
+        fields = ["id", "signal_type", "payload", "created_at"]
+        read_only_fields = fields
+
+
+class VoiceCallStartView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            conversation = get_object_or_404(
+                conversations_visible_to_user(request.user).select_for_update(),
+                pk=pk,
+            )
+            recipient = (
+                conversation_artist_profile(conversation).user
+                if conversation.customer_id == request.user.id
+                else conversation.customer
+            )
+            now = timezone.now()
+            active_calls = VoiceCall.objects.filter(
+                conversation=conversation,
+                status__in=[VoiceCall.STATUS_RINGING, VoiceCall.STATUS_ACCEPTED],
+            )
+            stale_ids = list(
+                active_calls.filter(
+                    models.Q(status=VoiceCall.STATUS_RINGING, created_at__lt=now - timedelta(seconds=45))
+                    | models.Q(status=VoiceCall.STATUS_ACCEPTED, last_activity_at__lt=now - timedelta(seconds=60))
+                ).values_list("id", flat=True)
+            )
+            if stale_ids:
+                active_calls.filter(id__in=stale_ids).update(status=VoiceCall.STATUS_EXPIRED, updated_at=now)
+                VoiceCallSignal.objects.filter(call_id__in=stale_ids).delete()
+
+            if active_calls.exists():
+                return Response({"detail": "A call is already active."}, status=status.HTTP_409_CONFLICT)
+
+            call = VoiceCall.objects.create(
+                conversation=conversation,
+                caller=request.user,
+                recipient=recipient,
+            )
+        return Response(VoiceCallSerializer(call).data, status=status.HTTP_201_CREATED)
+
+
+class ActiveVoiceCallView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        conversation = get_object_or_404(conversations_visible_to_user(request.user), pk=pk)
+        call = VoiceCall.objects.filter(
+            conversation=conversation,
+            status__in=[VoiceCall.STATUS_RINGING, VoiceCall.STATUS_ACCEPTED],
+        ).order_by("-created_at").first()
+        if call is None:
+            return Response(None)
+
+        now = timezone.now()
+        timeout_base = call.created_at if call.status == VoiceCall.STATUS_RINGING else call.last_activity_at
+        timeout = 45 if call.status == VoiceCall.STATUS_RINGING else 60
+        if timeout_base < now - timedelta(seconds=timeout):
+            call.status = VoiceCall.STATUS_EXPIRED
+            call.save(update_fields=["status", "updated_at"])
+            call.signals.all().delete()
+            return Response(None)
+
+        if call.status == VoiceCall.STATUS_ACCEPTED and call.last_activity_at < now - timedelta(seconds=10):
+            VoiceCall.objects.filter(pk=call.pk).update(last_activity_at=now)
+        return Response(VoiceCallSerializer(call).data)
+
+
+class VoiceCallStatusView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        call = get_object_or_404(
+            VoiceCall.objects.filter(
+                models.Q(caller=request.user) | models.Q(recipient=request.user),
+            ),
+            pk=call_id,
+        )
+        new_status = request.data.get("status")
+        now = timezone.now()
+
+        if new_status == VoiceCall.STATUS_ACCEPTED:
+            if request.user.id != call.recipient_id or call.status != VoiceCall.STATUS_RINGING:
+                return Response({"detail": "Only the recipient can accept a ringing call."}, status=status.HTTP_400_BAD_REQUEST)
+        elif new_status == VoiceCall.STATUS_REJECTED:
+            if request.user.id != call.recipient_id or call.status != VoiceCall.STATUS_RINGING:
+                return Response({"detail": "Only the recipient can reject a ringing call."}, status=status.HTTP_400_BAD_REQUEST)
+        elif new_status == VoiceCall.STATUS_ENDED:
+            if call.status not in [VoiceCall.STATUS_RINGING, VoiceCall.STATUS_ACCEPTED]:
+                return Response({"detail": "This call has already ended."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({"status": "Choose accepted, rejected, or ended."}, status=status.HTTP_400_BAD_REQUEST)
+
+        call.status = new_status
+        call.last_activity_at = now
+        call.save(update_fields=["status", "last_activity_at", "updated_at"])
+        if new_status in [VoiceCall.STATUS_REJECTED, VoiceCall.STATUS_ENDED]:
+            call.signals.all().delete()
+        return Response(VoiceCallSerializer(call).data)
+
+
+class VoiceCallSignalsView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_call(self, request, call_id):
+        return get_object_or_404(
+            VoiceCall.objects.filter(
+                models.Q(caller=request.user) | models.Q(recipient=request.user),
+            ),
+            pk=call_id,
+        )
+
+    def get(self, request, call_id):
+        call = self._get_call(request, call_id)
+        try:
+            after_id = max(0, int(request.query_params.get("after_id", "0")))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"after_id": "Must be a non-negative integer."}) from exc
+
+        signals = call.signals.exclude(sender=request.user).filter(id__gt=after_id).order_by("id")[:100]
+        if call.status == VoiceCall.STATUS_ACCEPTED and call.last_activity_at < timezone.now() - timedelta(seconds=10):
+            VoiceCall.objects.filter(pk=call.pk).update(last_activity_at=timezone.now())
+        return Response(VoiceCallSignalSerializer(signals, many=True).data)
+
+    def post(self, request, call_id):
+        call = self._get_call(request, call_id)
+        signal_type = request.data.get("signal_type")
+        payload = request.data.get("payload")
+        if signal_type not in {VoiceCallSignal.TYPE_OFFER, VoiceCallSignal.TYPE_ANSWER, VoiceCallSignal.TYPE_CANDIDATE}:
+            raise ValidationError({"signal_type": "Unsupported call signal."})
+        if not isinstance(payload, dict):
+            raise ValidationError({"payload": "Must be a JSON object."})
+        if len(str(payload)) > 20000:
+            raise ValidationError({"payload": "Call signal is too large."})
+        if call.status not in [VoiceCall.STATUS_RINGING, VoiceCall.STATUS_ACCEPTED]:
+            return Response({"detail": "This call is no longer active."}, status=status.HTTP_409_CONFLICT)
+        if signal_type == VoiceCallSignal.TYPE_OFFER and request.user.id != call.caller_id:
+            return Response({"detail": "Only the caller can send the offer."}, status=status.HTTP_403_FORBIDDEN)
+        if signal_type == VoiceCallSignal.TYPE_ANSWER and request.user.id != call.recipient_id:
+            return Response({"detail": "Only the recipient can send the answer."}, status=status.HTTP_403_FORBIDDEN)
+
+        signal = VoiceCallSignal.objects.create(
+            call=call,
+            sender=request.user,
+            signal_type=signal_type,
+            payload=payload,
+        )
+        VoiceCall.objects.filter(pk=call.pk).update(last_activity_at=timezone.now())
+        return Response(VoiceCallSignalSerializer(signal).data, status=status.HTTP_201_CREATED)
 
 
 class SendMessageView(generics.CreateAPIView):

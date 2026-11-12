@@ -5,6 +5,9 @@ import { getMyConversations, resolveMediaUrl } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
+import { useNetwork } from "../../context/NetworkContext";
+import OfflineBanner from "../../components/OfflineBanner";
+import { saveConversationsCache, getConversationsCache } from "../../services/offlineCache";
 import ScreenHeader from "../../components/ScreenHeader";
 import Image from "../../components/MediaImage";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,20 +68,49 @@ export default function ConversationsListScreen() {
   const load = () => {
     setError(null);
     getMyConversations()
-      .then((res) => setConversations(res.data))
-      .catch((err) => setError(err.response?.data?.detail || "Failed to load conversations"))
+      .then((res) => {
+        setConversations(res.data);
+        saveConversationsCache(res.data);
+        setError(null);
+      })
+      .catch((err) => {
+        // If we already loaded cached conversations, do not wipe screen
+        setConversations((prev) => {
+          if (prev.length === 0) {
+            setError(err.response?.data?.detail || "Failed to load conversations");
+          }
+          return prev;
+        });
+      })
       .finally(() => setLoading(false));
   };
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     getMyConversations()
-      .then((res) => setConversations(res.data))
-      .catch((err) => setError(err.response?.data?.detail || "Failed to load conversations"))
+      .then((res) => {
+        setConversations(res.data);
+        saveConversationsCache(res.data);
+        setError(null);
+      })
+      .catch((err) => {
+        setConversations((prev) => {
+          if (prev.length === 0) {
+            setError(err.response?.data?.detail || "Failed to load conversations");
+          }
+          return prev;
+        });
+      })
       .finally(() => setRefreshing(false));
   }, []);
 
   useEffect(() => {
+    getConversationsCache().then((cached) => {
+      if (cached && cached.length > 0) {
+        setConversations(cached);
+        setLoading(false);
+      }
+    });
     load();
   }, []);
 
@@ -131,6 +163,7 @@ export default function ConversationsListScreen() {
 
   return (
     <View style={styles.container}>
+      <OfflineBanner onRetry={onRefresh} />
       <ScreenHeader title={t("myConversationsTitle")} showProfileAction />
 
       <View style={styles.searchRow}>

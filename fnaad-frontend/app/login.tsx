@@ -1,14 +1,13 @@
+import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import Image from "../components/MediaImage";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { loginUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -38,8 +37,8 @@ export default function LoginScreen() {
       setLoggedIn(true);
       router.push("/");
     } catch (err: any) {
-      if (!err.response) {
-        setErrorMsg(t("serverUnreachable") || "Cannot reach the server. Please check your internet connection.");
+      if (!err.response || err.code === "ERR_NETWORK" || err.message?.toLowerCase().includes("network")) {
+        setErrorMsg(t("serverUnreachable") || "You are offline. Please check your internet connection and try again.");
       } else {
         setErrorMsg(t("loginError"));
       }
@@ -72,7 +71,7 @@ export default function LoginScreen() {
         <Text style={styles.label}>{t("emailField")}</Text>
         <TextInput
           style={styles.field}
-          placeholder="name@example.com"
+          placeholder="fnaad@example.com"
           placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}

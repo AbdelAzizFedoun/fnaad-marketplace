@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, FlatList, Modal, TextInput, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import Image from "../../components/MediaImage";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import { getProductDetail, getArtistProducts, resolveMediaUrl, startConversation, getProductReviews, getFavoriteIds, toggleFavorite, getProductComments, createProductComment, unwrapList } from "../../services/api";
+import { getProductDetail, getArtistProducts, resolveMediaUrl, startConversation, sendInquiry, getProductReviews, getFavoriteIds, toggleFavorite, getProductComments, createProductComment, unwrapList } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useNetwork } from "../../context/NetworkContext";
+import OfflineBanner from "../../components/OfflineBanner";
+import { saveProductDetailCache, getProductDetailCache } from "../../services/offlineCache";
 import ScreenHeader from "../../components/ScreenHeader";
 import ShareSheet from "../../components/ShareSheet";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
@@ -156,6 +159,7 @@ export default function ProductDetailScreen() {
   const { loggedIn, user } = useAuth();
   const { t } = useLanguage();
   const { colors } = useTheme();
+  const { isOnline, notifyOffline } = useNetwork();
   const layout = useResponsiveLayout();
   const contentWidth = Math.min(layout.width - layout.horizontalPadding * 2, layout.maxContentWidth);
   const carouselWidth = layout.isDesktop ? Math.min(560, Math.floor(contentWidth * 0.54)) : contentWidth;
@@ -168,6 +172,9 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [startingChat, setStartingChat] = useState(false);
+  const [sendingInquiry, setSendingInquiry] = useState(false);
+  const [inquirySent, setInquirySent] = useState(false);
+  const [inquiryMessage, setInquiryMessage] = useState("");
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const [liked, setLiked] = useState(false);
   const [commentsVisible, setCommentsVisible] = useState(false);
@@ -182,6 +189,7 @@ export default function ProductDetailScreen() {
     getProductDetail(Number(id))
       .then((res) => {
         setProduct(res.data);
+        saveProductDetailCache(Number(id), res.data);
         getProductReviews(Number(id))
           .then((r) => setReviews(unwrapList(r.data)))
           .catch((err) => console.log("Reviews load error:", err.message));
@@ -197,16 +205,25 @@ export default function ProductDetailScreen() {
       .catch((err) => {
         const status = err.response?.status;
         console.log("Product detail error:", status, err.response?.data || err.message);
-        // Only a true 404 means the artwork is missing; anything else
-        // (401 expired session, 502, offline) is a different problem.
-        setErrorMsg(
-          status === 404 ? t("productNotFound") : err.message || "Failed to load artwork"
-        );
+        setProduct((current) => {
+          if (!current) {
+            setErrorMsg(
+              status === 404 ? t("productNotFound") : err.message || "Failed to load artwork"
+            );
+          }
+          return current;
+        });
       })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
+    getProductDetailCache(Number(id)).then((cached) => {
+      if (cached) {
+        setProduct(cached);
+        setLoading(false);
+      }
+    });
     loadProductData();
   }, [id]);
 
@@ -270,6 +287,10 @@ export default function ProductDetailScreen() {
       router.push("/login");
       return;
     }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionLike") || "like artworks");
+      return;
+    }
     const previousLiked = liked;
     setLiked(!previousLiked);
     setProduct((current) => current ? { ...current, like_count: Math.max(0, (current.like_count || 0) + (previousLiked ? -1 : 1)) } : current);
@@ -286,6 +307,10 @@ export default function ProductDetailScreen() {
     if (!loggedIn) {
       setCommentsVisible(false);
       router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionComment") || "post a comment");
       return;
     }
     if (!text || sendingComment) return;
@@ -316,6 +341,10 @@ export default function ProductDetailScreen() {
 
   const handleMessageArtist = async () => {
     if (!product) return;
+    if (!isOnline) {
+      notifyOffline(t("offlineActionOrder") || "contact an artist");
+      return;
+    }
     setStartingChat(true);
     try {
       const res = await startConversation(product.id);
@@ -325,6 +354,37 @@ export default function ProductDetailScreen() {
       setErrorMsg(t("chatStartError"));
     } finally {
       setStartingChat(false);
+    }
+  };
+
+  const handlePurchaseInquiry = async () => {
+    if (!product || sendingInquiry || inquirySent || product.is_sold) return;
+    if (!loggedIn) {
+      router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionOrder") || "contact an artist");
+      return;
+    }
+
+    setSendingInquiry(true);
+    setInquiryMessage("");
+    try {
+      await sendInquiry(product.id);
+      setInquirySent(true);
+      try {
+        const conversation = await startConversation(product.id);
+        router.push(`/conversation/${conversation.data.id}`);
+      } catch (chatError: any) {
+        console.warn("Purchase inquiry sent but conversation could not open:", chatError.response?.data || chatError.message);
+        setInquiryMessage(t("purchaseInquirySent"));
+      }
+    } catch (inquiryError: any) {
+      console.warn("Purchase inquiry failed:", inquiryError.response?.data || inquiryError.message);
+      setInquiryMessage(t("purchaseInquiryError"));
+    } finally {
+      setSendingInquiry(false);
     }
   };
 
@@ -360,6 +420,7 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={styles.container}>
+      <OfflineBanner onRetry={loadProductData} />
       <ScreenHeader title={product.title} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Pressable
@@ -453,16 +514,39 @@ export default function ProductDetailScreen() {
             <Text style={styles.paymentHint}>{t("paymentHint")}</Text>
           </View>
 
+          {!isOwnProduct && !product.is_sold && (
+            <View style={styles.purchaseGuide}>
+              <Text style={styles.purchaseGuideTitle}>{t("purchaseGuideTitle")}</Text>
+              <Text style={styles.purchaseGuideBody}>{t("purchaseGuideBody")}</Text>
+            </View>
+          )}
+
           {!isOwnProduct && (
-            <Pressable
-              style={[styles.messageBtn, product.is_sold && styles.disabledBtn]}
-              onPress={handleMessageArtist}
-              disabled={startingChat || product.is_sold}
-            >
-              <Text style={styles.messageBtnText}>
-                {product.is_sold ? t("sold") : startingChat ? "..." : t("chatWithArtist")}
-              </Text>
-            </Pressable>
+            <>
+              {!product.is_sold && (
+                <>
+                  <Pressable
+                    style={[styles.messageBtn, (sendingInquiry || inquirySent) && styles.disabledBtn]}
+                    onPress={handlePurchaseInquiry}
+                    disabled={sendingInquiry || inquirySent}
+                  >
+                    <Text style={styles.messageBtnText}>
+                      {sendingInquiry ? t("purchaseInquirySending") : inquirySent ? t("purchaseInquirySent") : t("purchaseInquiry")}
+                    </Text>
+                  </Pressable>
+                  {inquiryMessage ? <Text style={styles.inquiryMessage}>{inquiryMessage}</Text> : null}
+                </>
+              )}
+              <Pressable
+                style={styles.chatBtn}
+                onPress={handleMessageArtist}
+                disabled={startingChat}
+              >
+                <Text style={styles.chatBtnText}>
+                  {startingChat ? "..." : t("chatWithArtist")}
+                </Text>
+              </Pressable>
+            </>
           )}
 
           {!product.is_sold && (
@@ -673,11 +757,23 @@ function createStyles(
     paymentLabel: { color: colors.textMuted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "600" },
     paymentValue: { color: colors.accent, fontSize: 17, fontWeight: "700", marginTop: 8 },
     paymentHint: { color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 17 },
+    purchaseGuide: {
+      borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+      padding: 14, marginTop: 14, backgroundColor: colors.surface,
+    },
+    purchaseGuideTitle: { color: colors.text, fontSize: 13, fontWeight: "700" },
+    purchaseGuideBody: { color: colors.textMuted, fontSize: 12, marginTop: 6, lineHeight: 18 },
+    inquiryMessage: { color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 18, textAlign: "center" },
     messageBtn: {
       backgroundColor: colors.accent, borderRadius: 12, padding: 14,
       alignItems: "center", marginTop: 16, ...shadow(2),
     },
     messageBtnText: { color: colors.accentText, fontWeight: "700", fontSize: 15 },
+    chatBtn: {
+      borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14,
+      alignItems: "center", marginTop: 12,
+    },
+    chatBtnText: { color: colors.text, fontWeight: "600", fontSize: 14 },
     contactBtn: {
       backgroundColor: "#25D366", borderRadius: 12, padding: 14,
       alignItems: "center", marginTop: 12, ...shadow(2),

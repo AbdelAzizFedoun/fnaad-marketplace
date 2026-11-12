@@ -10,7 +10,12 @@ import { getConversationDetail, getMyConversations, sendMessage, sendLocationMes
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
+import { useNetwork } from "../../context/NetworkContext";
+import OfflineBanner from "../../components/OfflineBanner";
+import { saveMessagesCache, getMessagesCache } from "../../services/offlineCache";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useVoiceCall } from "../../hooks/useVoiceCall";
+import VoiceCallOverlay from "../../components/VoiceCallOverlay";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -438,25 +443,58 @@ function ConversationHeader({
         <Ionicons name="arrow-back" size={22} color={colors.accent} />
       </Pressable>
 
-      <View style={styles.avatarContainer}>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarInitial}>{displayName?.charAt(0).toUpperCase()}</Text>
+      {isCustomer ? (
+        <Pressable
+          style={styles.identity}
+          onPress={() => router.push(`/artist/${conversation.artist_id}`)}
+          accessibilityRole="button"
+          accessibilityLabel={t("viewArtistProfile")}
+        >
+          <View style={styles.avatarContainer}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{displayName?.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            {conversation.other_user_online && <View style={styles.onlineIndicator} />}
           </View>
-        )}
-        {conversation.other_user_online && <View style={styles.onlineIndicator} />}
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name} numberOfLines={1}>
-          {displayName}{showVerified ? "  ✓" : ""}
-        </Text>
-        <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
-      </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {displayName}{showVerified ? "  ✓" : ""}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+          </View>
+        </Pressable>
+      ) : (
+        <>
+          <View style={styles.avatarContainer}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{displayName?.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            {conversation.other_user_online && <View style={styles.onlineIndicator} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {displayName}{showVerified ? "  ✓" : ""}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+          </View>
+        </>
+      )}
       {onCall && (
-        <Pressable hitSlop={10} style={styles.headerIconBtn} onPress={onCall} accessibilityLabel={`Call ${displayName}`}>
+        <Pressable
+          hitSlop={10}
+          style={styles.headerIconBtn}
+          onPress={onCall}
+          accessibilityRole="button"
+          accessibilityLabel={`${t("voiceCallStart")} ${displayName}`}
+        >
           <Ionicons name="call-outline" size={20} color={colors.accent} />
         </Pressable>
       )}
@@ -465,14 +503,6 @@ function ConversationHeader({
       </Pressable>
     </View>
   );
-
-  if (isCustomer) {
-    return (
-      <Pressable onPress={() => router.push(`/artist/${conversation.artist_id}`)}>
-        {HeaderContent}
-      </Pressable>
-    );
-  }
 
   return HeaderContent;
 }
@@ -496,6 +526,7 @@ function headerStyles(colors: any, topInset: number) {
     },
     name: { color: colors.text, fontSize: 15, fontWeight: "700" },
     subtitle: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
+    identity: { flex: 1, flexDirection: "row", alignItems: "center" },
     headerIconBtn: { padding: 6 },
   });
 }
@@ -727,6 +758,7 @@ export default function ConversationScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { colors } = useTheme();
+  const { isOnline, notifyOffline } = useNetwork();
   const layout = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const styles = createStyles(colors, layout, insets.top, insets.bottom);
@@ -780,6 +812,7 @@ export default function ConversationScreen() {
   const voiceCancelRef = useRef(false);
   const voiceStartXRef = useRef(0);
   const router = useRouter();
+  const voiceCall = useVoiceCall(Number(id), user?.id);
 
   useEffect(() => {
     if (!recorderState.isRecording) {
@@ -796,7 +829,10 @@ export default function ConversationScreen() {
 
   const loadConversation = () => {
     return getConversationDetail(Number(id))
-      .then((res) => setConversation(res.data))
+      .then((res) => {
+        setConversation(res.data);
+        saveMessagesCache(Number(id), res.data);
+      })
       .catch((err) => console.log("Conversation load error:", err.response?.data || err.message))
       .finally(() => setLoading(false));
   };
@@ -811,6 +847,12 @@ export default function ConversationScreen() {
   };
 
   useEffect(() => {
+    getMessagesCache(Number(id)).then((cached) => {
+      if (cached) {
+        setConversation(cached);
+        setLoading(false);
+      }
+    });
     loadConversation();
     checkReviewEligibility();
     markConversationRead(Number(id)).catch((err) =>
@@ -839,6 +881,10 @@ export default function ConversationScreen() {
 
   const handleSend = async () => {
     if (!text.trim()) return;
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     setSending(true);
     try {
       await sendMessage(Number(id), text.trim(), replyingTo?.id);
@@ -848,6 +894,12 @@ export default function ConversationScreen() {
       loadConversation();
     } catch (err: any) {
       console.log("Send message error:", err.response?.data || err.message);
+      if (!err.response || err.code === "ERR_NETWORK" || err.message?.toLowerCase().includes("network")) {
+        Alert.alert(
+          t("offlineTitle") || "You're offline",
+          t("offlineMessageDraftSaved") || "Message not sent: you are offline. Your draft has been kept."
+        );
+      }
     } finally {
       setSending(false);
     }
@@ -868,6 +920,10 @@ export default function ConversationScreen() {
 
   const startVoiceRecording = async (event?: any) => {
     if (voiceHoldRef.current || sendingVoice) return;
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     if (!voiceRecorder.available || !recorder) {
       const message = Platform.OS === "web"
         ? "Voice recording is unavailable. Refresh this page and allow microphone access."
@@ -1189,6 +1245,15 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
       .catch(() => Alert.alert(t("contactInfo") || "Contact Info", phone));
   };
 
+  const startInAppCall = () => {
+    setContactVisible(false);
+    if (!isOnline) {
+      notifyOffline(t("offlineActionCall") || "start a call");
+      return;
+    }
+    void voiceCall.startCall();
+  };
+
   const handleViewArtistProfile = () => {
     setContactVisible(false);
     router.push(`/artist/${conversation.artist_id}`);
@@ -1277,6 +1342,10 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
   const handlePickImage = async () => {
     setMenuVisible(false);
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -1313,6 +1382,10 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
   const handleTakePhoto = async () => {
     setMenuVisible(false);
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -1344,6 +1417,10 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
   const handlePickDocument = async () => {
     setMenuVisible(false);
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     try {
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
@@ -1373,6 +1450,10 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
   const handleShareLocationFromMenu = async () => {
     setMenuVisible(false);
+    if (!isOnline) {
+      notifyOffline(t("offlineActionMessage") || "send messages");
+      return;
+    }
     setSharingLocation(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
@@ -1406,18 +1487,14 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
       <View style={styles.desktopShell}>
       {layout.isDesktop && <DesktopInbox activeId={Number(id)} colors={colors} />}
       <View style={styles.workspace}>
+      <OfflineBanner onRetry={loadConversation} />
       <ConversationHeader
         conversation={conversation}
         isCustomer={isCustomer}
         colors={colors}
         topInset={insets.top}
         onMenuPress={() => setMenuVisible(true)}
-        onCall={(() => {
-          const phone = conversation.contact?.viewer_is_customer
-            ? conversation.contact.artist.phone_number
-            : conversation.contact?.customer.phone_number;
-          return phone ? () => openDial(phone) : undefined;
-        })()}
+        onCall={startInAppCall}
       />
 
       <View style={styles.subHeader}>
@@ -1950,6 +2027,18 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
                 <Pressable
                   style={[styles.contactProfileBtn, { backgroundColor: colors.accent }]}
+                  onPress={startInAppCall}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t("voiceCallStart")} ${isCustomer ? contact.artist.brand_name : contact.customer.username}`}
+                >
+                  <Ionicons name="call-outline" size={18} color={colors.accentText} />
+                  <Text style={[styles.contactProfileBtnText, { color: colors.accentText }]}>
+                    {t("voiceCallStart")}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.contactProfileBtn, { backgroundColor: colors.accent }]}
                   onPress={handleViewArtistProfile}
                 >
                   <Ionicons name="open-outline" size={18} color={colors.accentText} />
@@ -2013,6 +2102,22 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
           </Pressable>
         </Pressable>
       </Modal>
+
+      <VoiceCallOverlay
+        phase={voiceCall.phase}
+        remoteName={isCustomer ? conversation?.artist_name || "" : conversation?.customer_username || ""}
+        remoteStream={voiceCall.remoteStream}
+        muted={voiceCall.muted}
+        elapsedSeconds={voiceCall.elapsedSeconds}
+        error={Platform.OS === "web" && voiceCall.phase === "error" ? t("voiceCallMobileOnly") : voiceCall.error}
+        colors={colors}
+        t={t}
+        onAccept={() => void voiceCall.acceptCall()}
+        onDecline={() => void voiceCall.declineCall()}
+        onEnd={() => void voiceCall.endCall()}
+        onToggleMute={voiceCall.toggleMute}
+        onDismiss={voiceCall.dismiss}
+      />
       </View>
       </View>
     </KeyboardAvoidingView>
