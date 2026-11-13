@@ -21,9 +21,9 @@ services:
       - key: CORS_ALLOW_ALL_ORIGINS
         value: "true"
       - key: CORS_ALLOWED_ORIGINS
-        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com"
+        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com,https://fnaad-marketplace.com,https://www.fnaad-marketplace.com"
       - key: CSRF_TRUSTED_ORIGINS
-        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com"
+        value: "https://fnaad-admin.onrender.com,https://fnaad-api.onrender.com,https://fnaad-art.onrender.com,https://fnaad-web.onrender.com,https://fnaad-marketplace.com,https://www.fnaad-marketplace.com"
       - key: SECURE_SSL_REDIRECT
         value: "true"
       - key: SECURE_HSTS_SECONDS
