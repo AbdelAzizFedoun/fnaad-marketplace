@@ -7,11 +7,7 @@ const normalizeApiBaseUrl = (raw?: string) => {
   // Strip all whitespace, accidental newlines, or spaces
   const sanitized = (raw || "").replace(/\s+/g, "").replace(/\/+$/, "");
   if (!sanitized) {
-    return "https://fnaad-api.onrender.com/api";
-
-
-
-    
+    return "https://api-production-167a1dfd.up.railway.app/api";
   }
   return sanitized.endsWith("/api") ? sanitized : `${sanitized}/api`;
 };
