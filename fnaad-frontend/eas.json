@@ -17,15 +17,15 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://fnaad-api.onrender.com/api",
-        "EXPO_PUBLIC_API_ORIGIN": "https://fnaad-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api-production-167a1dfd.up.railway.app/api",
+        "EXPO_PUBLIC_API_ORIGIN": "https://api-production-167a1dfd.up.railway.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://fnaad-api.onrender.com/api",
-        "EXPO_PUBLIC_API_ORIGIN": "https://fnaad-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api-production-167a1dfd.up.railway.app/api",
+        "EXPO_PUBLIC_API_ORIGIN": "https://api-production-167a1dfd.up.railway.app"
       }
     }
   },
