@@ -12,8 +12,8 @@ console.log('[build-web] Starting build for Cloudflare...');
 // Default production env vars for Expo web if not set in CI/environment
 const buildEnv = {
   ...process.env,
-  EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://fnaad-api.onrender.com/api',
-  EXPO_PUBLIC_API_ORIGIN: process.env.EXPO_PUBLIC_API_ORIGIN || 'https://fnaad-api.onrender.com',
+  EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api-production-167a1dfd.up.railway.app/api',
+  EXPO_PUBLIC_API_ORIGIN: process.env.EXPO_PUBLIC_API_ORIGIN || 'https://api-production-167a1dfd.up.railway.app',
   EXPO_PUBLIC_FNAAD_SUBSCRIPTION_MOMO_PROVIDER: process.env.EXPO_PUBLIC_FNAAD_SUBSCRIPTION_MOMO_PROVIDER || 'Orange Money',
   EXPO_PUBLIC_FNAAD_SUBSCRIPTION_WHATSAPP: process.env.EXPO_PUBLIC_FNAAD_SUBSCRIPTION_WHATSAPP || '237688254466',
 };
