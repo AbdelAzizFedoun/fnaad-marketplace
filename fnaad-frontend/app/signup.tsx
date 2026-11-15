@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { registerUser } from "../services/api";
+import { registerUser, loginUser } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
@@ -32,6 +33,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function SignupScreen() {
   const { role } = useLocalSearchParams<{ role: string }>();
   const router = useRouter();
+  const { setLoggedIn, refreshUser } = useAuth();
   const { t } = useLanguage();
   const { colors, fonts } = useTheme();
   const layout = useResponsiveLayout();
@@ -87,9 +89,11 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
+      const cleanUsername = username.trim();
+      const cleanEmail = email.trim().toLowerCase();
       await registerUser({
-        username: username.trim(),
-        email: email.trim(),
+        username: cleanUsername,
+        email: cleanEmail,
         phone_number: phone.trim(),
         password,
         role: isArtist ? "artist" : "customer",
@@ -97,11 +101,30 @@ export default function SignupScreen() {
         gender,
         national_id_number: isArtist ? nationalId.trim() : undefined,
       });
-      Alert.alert(
-        t("accountCreatedTitle") || "Account Created!",
-        t("accountCreatedMsg") || "Welcome to FNAAD! You can now log in to your account."
-      );
-      router.push("/login");
+
+      try {
+        await loginUser(cleanEmail, password);
+        await refreshUser();
+        setLoggedIn(true);
+
+        const welcomeTitle = t("welcomeTitle") || "Welcome to FNAAD!";
+        const welcomeMsg = t("welcomeUserMsg", { name: cleanUsername }) || `Glad to have you with us, ${cleanUsername}! Explore our art gallery now.`;
+
+        Alert.alert(
+          welcomeTitle,
+          welcomeMsg,
+          [{ text: "OK", onPress: () => router.push("/") }]
+        );
+        if (Platform.OS === "web") {
+          router.push("/");
+        }
+      } catch {
+        Alert.alert(
+          t("accountCreatedTitle") || "Account Created!",
+          t("accountCreatedMsg") || "Welcome to FNAAD! You can now log in to your account."
+        );
+        router.push("/login");
+      }
     } catch (err: any) {
       if (!err.response || err.code === "ERR_NETWORK" || err.message?.toLowerCase().includes("network")) {
         setErrorMsg(t("serverUnreachable") || "You are offline. Please check your internet connection and try again.");
