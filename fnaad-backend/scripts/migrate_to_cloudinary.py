@@ -13,20 +13,30 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 from dotenv import load_dotenv
 load_dotenv(BASE_DIR / ".env")
 
 CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "")
 if not CLOUDINARY_URL:
-    print("❌  CLOUDINARY_URL is not set in .env — aborting.")
+    print("ERROR: CLOUDINARY_URL is not set in .env - aborting.")
     sys.exit(1)
 
+# Parse cloudinary://key:secret@cloud_name without importing Django
+import urllib.parse
+_parsed = urllib.parse.urlparse(CLOUDINARY_URL)
 import cloudinary
+cloudinary.config(
+    cloud_name=_parsed.hostname,
+    api_key=_parsed.username,
+    api_secret=_parsed.password,
+)
 import cloudinary.uploader
 
 MEDIA_ROOT = BASE_DIR / "media"
+PRODUCT_MEDIA_ROOTS = [
+    MEDIA_ROOT / "products",
+]
 
 VIDEO_EXTS  = {".mp4", ".mov", ".avi", ".webm", ".m4a", ".3gp"}
 IMAGE_EXTS  = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
@@ -38,13 +48,15 @@ def resource_type(path: Path) -> str:
     return "raw"
 
 def main():
-    print(f"🚀  Migrating media/ → Cloudinary  (cloud: {cloudinary.config().cloud_name})\n")
+    print(f"Migrating media/ -> Cloudinary (cloud: {cloudinary.config().cloud_name})\n")
 
     if not MEDIA_ROOT.exists():
-        print("⚠️   No local media/ folder found — nothing to migrate.")
+        print("WARNING: No local media/ folder found - nothing to migrate.")
         return
 
-    files = [f for f in MEDIA_ROOT.rglob("*") if f.is_file()]
+    # Product artwork only. Do not upload profile photos, messages, audio,
+    # documents, or other private media as part of this migration.
+    files = [f for root in PRODUCT_MEDIA_ROOTS if root.exists() for f in root.rglob("*") if f.is_file()]
     print(f"Found {len(files)} file(s).\n")
 
     success = failed = 0
@@ -55,10 +67,10 @@ def main():
         try:
             cloudinary.uploader.upload(str(f), public_id=pub,
                                        resource_type=rtype, overwrite=False)
-            print(f"  ✅  {rel}")
+            print(f"  OK  {rel}")
             success += 1
         except Exception as e:
-            print(f"  ❌  {rel}  →  {e}")
+            print(f"  FAILED  {rel}  ->  {e}")
             failed += 1
 
     print(f"\nDone — {success} uploaded, {failed} failed.")
