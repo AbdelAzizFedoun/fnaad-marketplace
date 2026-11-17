@@ -73,7 +73,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',          # must be before staticfiles
     'django.contrib.staticfiles',
+    'cloudinary',
 
     # Third-party
     'rest_framework',
@@ -328,7 +330,23 @@ CORS_ALLOW_HEADERS = [
     "ngrok-skip-browser-warning",
 ]
 
-# Media files (product photos, avatars, banners)
+# ── Media / File Storage ─────────────────────────────────────────────────────
+# In production (CLOUDINARY_URL is set), files are uploaded to Cloudinary so
+# they survive Railway redeploys. Without the env var, Django falls back to
+# the local filesystem for local development.
+
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "")
+
+if CLOUDINARY_URL:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+    CLOUDINARY_STORAGE = {
+        "MEDIA_TAG": "fnaad-media",
+        "PREFIX": "fnaad",
+    }
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 

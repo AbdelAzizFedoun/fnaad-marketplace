@@ -35,3 +35,5 @@ imagehash==4.3.2
 scipy>=1.10.0
 numpy>=1.24.0
 imageio-ffmpeg==0.6.0
+cloudinary==1.44.0
+django-cloudinary-storage==0.3.0
