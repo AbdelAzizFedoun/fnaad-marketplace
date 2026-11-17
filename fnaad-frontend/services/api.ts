@@ -305,6 +305,26 @@ export const resolveMediaUrl = (path?: string | null) => {
     // Parse relative paths against API_ORIGIN; absolute URLs are parsed as-is.
     const base = API_ORIGIN || "http://10.0.251.236:8000";
     const url = new URL(path, base);
+
+    // Cloudinary URLs are already public delivery URLs. Do not rewrite them
+    // back to the Railway API origin.
+    if (url.hostname.endsWith("cloudinary.com")) {
+      return url.toString();
+    }
+
+    // ── Web: proxy /media/* through the Cloudflare Worker ─────────────────
+    // The Railway backend returns `Access-Control-Allow-Origin: null` for
+    // /media/ files, which makes browsers block cross-origin <img> loads.
+    // Our worker.js intercepts /media/* requests and re-serves them with the
+    // correct CORS header, so we simply use a root-relative path here.
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      url.pathname.startsWith("/media/")
+    ) {
+      return `${url.pathname}${url.search}`;
+    }
+
     // Always use our known public origin – this fixes http→https and wrong host.
     return `${base.replace(/\/+$/, "")}${url.pathname}${url.search}`;
   } catch {

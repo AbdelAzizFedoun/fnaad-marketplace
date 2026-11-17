@@ -148,6 +148,11 @@ export const resolveMediaUrl = (path?: string | null) => {
   const origin = API_BASE_URL.replace(/\/api\/?$/, "");
   try {
     const url = new URL(path, origin);
+    // Cloudinary URLs are already public delivery URLs. Preserve their host
+    // instead of rewriting them to the Railway API origin.
+    if (url.hostname.endsWith("cloudinary.com")) {
+      return url.toString();
+    }
     return `${origin}${url.pathname}${url.search}`;
   } catch {
     return `${origin}/${path.replace(/^\/+/, "")}`;
