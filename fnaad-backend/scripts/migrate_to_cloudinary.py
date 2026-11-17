@@ -62,7 +62,9 @@ def main():
     success = failed = 0
     for f in files:
         rel  = f.relative_to(MEDIA_ROOT)
-        pub  = f"fnaad/{str(rel).replace(chr(92), '/')}"
+        # Cloudinary appends the format to the delivery URL. Keep the file
+        # extension out of public_id so URLs do not become `image.jpg.jpg`.
+        pub  = f"fnaad/{str(rel.with_suffix('')).replace(chr(92), '/')}"
         rtype = resource_type(f)
         try:
             cloudinary.uploader.upload(str(f), public_id=pub,

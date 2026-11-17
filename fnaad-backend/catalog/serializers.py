@@ -36,10 +36,23 @@ class ProductImageSerializer(serializers.ModelSerializer):
         """
         if not field_value:
             return None
+        from django.conf import settings
+        if getattr(settings, "CLOUDINARY_URL", ""):
+            import cloudinary.utils
+            from pathlib import PurePosixPath
+            name = str(field_value.name).replace("\\", "/")
+            path = PurePosixPath(name)
+            public_id = f"fnaad/{path.with_suffix('').as_posix()}"
+            resource_url, _ = cloudinary.utils.cloudinary_url(
+                public_id,
+                secure=True,
+                resource_type="image",
+                format=path.suffix.lstrip(".") or None,
+            )
+            return resource_url
         request = self.context.get("request")
         if request:
             return request.build_absolute_uri(field_value.url)
-        from django.conf import settings
         base = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
         if base:
             return f"{base}{field_value.url}"
