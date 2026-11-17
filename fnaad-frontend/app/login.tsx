@@ -129,10 +129,10 @@ function createStyles(
 ) {
   return StyleSheet.create({
     keyboardContainer: { flex: 1, backgroundColor: colors.background },
-    container: { flexGrow: 1, backgroundColor: colors.background, justifyContent: "center", padding: 24 },
+    container: { flexGrow: 1, backgroundColor: colors.background, justifyContent: "center", padding: layout.horizontalPadding, paddingVertical: 24 },
     form: { width: "100%", maxWidth: layout.formWidth, alignSelf: "center" },
-    logo: { width: 200, height: 200, alignSelf: "center", marginBottom: 8 },
-    title: { color: colors.text, fontSize: 22, fontWeight: "600", marginBottom: 24, textAlign: "center" },
+    logo: { width: layout.isSmallPhone ? 120 : 160, height: layout.isSmallPhone ? 120 : 160, alignSelf: "center", marginBottom: 8 },
+    title: { color: colors.text, fontSize: layout.isSmallPhone ? 20 : 22, fontWeight: "600", marginBottom: 20, textAlign: "center" },
     error: { color: "#E7A0A0", fontSize: 12, lineHeight: 18, marginBottom: 14, textAlign: "center" },
     label: { color: colors.text, fontSize: 13, fontWeight: "700", marginBottom: 7 },
     field: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, color: colors.text, marginBottom: 16, fontSize: 14, minHeight: 48 },

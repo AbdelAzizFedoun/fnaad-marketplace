@@ -1,4 +1,6 @@
 import { Tabs } from "expo-router";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
@@ -12,6 +14,10 @@ export default function TabsLayout() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const isWeb = Platform.OS === "web";
+  const bottomInset = isWeb ? 8 : Math.max(insets.bottom, 8);
+  const tabHeight = 52 + bottomInset;
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
@@ -63,8 +69,8 @@ export default function TabsLayout() {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
+          height: tabHeight,
+          paddingBottom: bottomInset,
           paddingTop: 6,
         },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600" },

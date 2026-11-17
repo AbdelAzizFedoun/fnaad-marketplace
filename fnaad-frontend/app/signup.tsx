@@ -422,11 +422,11 @@ function createStyles(
       alignItems: "center",
       backgroundColor: colors.surface,
       borderRadius: 14,
-      padding: 14,
+      padding: layout.isSmallPhone ? 10 : 14,
       marginBottom: 20,
       borderWidth: 1,
       borderColor: colors.border,
-      gap: 12,
+      gap: layout.isSmallPhone ? 8 : 12,
     },
     roleIconWrap: {
       width: 42,

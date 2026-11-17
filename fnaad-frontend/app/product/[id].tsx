@@ -163,7 +163,7 @@ export default function ProductDetailScreen() {
   const layout = useResponsiveLayout();
   const contentWidth = Math.min(layout.width - layout.horizontalPadding * 2, layout.maxContentWidth);
   const carouselWidth = layout.isDesktop ? Math.min(560, Math.floor(contentWidth * 0.54)) : contentWidth;
-  const carouselHeight = layout.isDesktop ? 500 : 320;
+  const carouselHeight = layout.isDesktop ? 500 : Math.min(380, Math.max(260, Math.round(contentWidth * 0.95)));
   const styles = createStyles(colors, layout);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -722,9 +722,17 @@ function createStyles(
     content: {
       width: "100%",
       maxWidth: layout.isDesktop ? layout.maxContentWidth : undefined,
-      padding: 20,
+      padding: layout.isSmallPhone ? 14 : 20,
     },
-    title: { color: colors.text, fontFamily: "Georgia", fontSize: 25, fontWeight: "700", lineHeight: 31 },
+    title: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.text,
+      fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
+      fontSize: layout.isSmallPhone ? 21 : 25,
+      fontWeight: "700",
+      lineHeight: layout.isSmallPhone ? 26 : 31,
+    },
     category: { color: colors.accent, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: "700" },
     ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 8 },
     ratingText: { color: colors.textMuted, fontSize: 13 },
@@ -788,7 +796,7 @@ function createStyles(
     reviewsSection: {
       width: "100%",
       maxWidth: layout.maxContentWidth,
-      paddingHorizontal: layout.isDesktop ? 20 : 20,
+      paddingHorizontal: layout.isSmallPhone ? 14 : 20,
       paddingTop: 28,
       paddingBottom: 24,
       borderTopWidth: 1,

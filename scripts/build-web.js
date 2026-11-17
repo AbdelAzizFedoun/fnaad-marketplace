@@ -36,4 +36,56 @@ if (fs.existsSync(rootDist)) {
 
 fs.cpSync(frontendDist, rootDist, { recursive: true });
 
+// 4. Inject mobile responsive viewport & touch resets into dist/index.html
+const indexHtmlPath = path.join(rootDist, 'index.html');
+if (fs.existsSync(indexHtmlPath)) {
+  console.log('[build-web] Injecting responsive mobile viewport & iOS/Android resets into index.html...');
+  let html = fs.readFileSync(indexHtmlPath, 'utf8');
+
+  // Replace standard viewport with mobile-first viewport including viewport-fit=cover
+  html = html.replace(
+    /<meta name="viewport" content="[^"]*"\s*\/?>/i,
+    '<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />\n    <meta name="mobile-web-app-capable" content="yes" />\n    <meta name="apple-mobile-web-app-capable" content="yes" />\n    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />\n    <meta name="theme-color" content="#131016" />'
+  );
+
+  // Inject responsive reset styling
+  const responsiveStyles = `
+    <style id="fnaad-mobile-resets">
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
+      }
+      body {
+        position: fixed;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        flex: 1;
+      }
+      @media screen and (max-width: 767px) {
+        input, select, textarea {
+          font-size: 16px !important;
+        }
+      }
+    </style>
+  `;
+
+  html = html.replace('</head>', `${responsiveStyles}\n  </head>`);
+  fs.writeFileSync(indexHtmlPath, html, 'utf8');
+  // Also keep frontendDist in sync
+  fs.writeFileSync(path.join(frontendDist, 'index.html'), html, 'utf8');
+}
+
 console.log('[build-web] Build completed successfully! Output ready in /dist.');
