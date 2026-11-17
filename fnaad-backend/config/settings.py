@@ -338,10 +338,15 @@ CORS_ALLOW_HEADERS = [
 CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "")
 
 if CLOUDINARY_URL:
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
     DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
     CLOUDINARY_STORAGE = {
         "MEDIA_TAG": "fnaad-media",
         "PREFIX": "fnaad",
@@ -353,7 +358,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Base URL used to build shareable public links (product pages, etc).
 # Update this to your real domain once you have one — everything else
 # that builds share links reads from here, nothing else needs to change.
-SITE_BASE_URL = os.getenv("SITE_BASE_URL", "http://localhost:8000")
+SITE_BASE_URL = os.getenv(
+    "SITE_BASE_URL",
+    "https://api-production-167a1dfd.up.railway.app",
+)
 
 # Fapshi credentials stay on the server; never copy them into the Expo app.
 # They are read from the environment only — they were once hardcoded
