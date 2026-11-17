@@ -1,5 +1,9 @@
 export default {
   async fetch(request, env) {
-    return env.ASSETS.fetch(request);
+    const assetResponse = await env.ASSETS.fetch(request);
+    if (assetResponse.status === 404 && request.method === "GET") {
+      return env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
+    }
+    return assetResponse;
   },
 };
