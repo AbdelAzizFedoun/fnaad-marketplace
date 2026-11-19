@@ -14,6 +14,7 @@ import ShareSheet from "../../components/ShareSheet";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { shadow, RADIUS } from "../../components/shadow";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import React from "react";
 
@@ -161,6 +162,7 @@ export default function ProductDetailScreen() {
   const { colors } = useTheme();
   const { isOnline, notifyOffline } = useNetwork();
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const contentWidth = Math.min(layout.width - layout.horizontalPadding * 2, layout.maxContentWidth);
   const carouselWidth = layout.isDesktop ? Math.min(560, Math.floor(contentWidth * 0.54)) : contentWidth;
   const carouselHeight = layout.isDesktop ? 500 : Math.min(380, Math.max(260, Math.round(contentWidth * 0.95)));
@@ -341,6 +343,10 @@ export default function ProductDetailScreen() {
 
   const handleMessageArtist = async () => {
     if (!product) return;
+    if (!loggedIn) {
+      router.push("/login");
+      return;
+    }
     if (!isOnline) {
       notifyOffline(t("offlineActionOrder") || "contact an artist");
       return;
@@ -422,7 +428,7 @@ export default function ProductDetailScreen() {
     <View style={styles.container}>
       <OfflineBanner onRetry={loadProductData} />
       <ScreenHeader title={product.title} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.productScroll} contentContainerStyle={styles.scrollContent}>
         <Pressable
           style={styles.artistShortcut}
           onPress={() => router.push(`/artist/${product.artist_id}`)}
@@ -521,31 +527,18 @@ export default function ProductDetailScreen() {
             </View>
           )}
 
-          {!isOwnProduct && (
+          {!isOwnProduct && !product.is_sold && (
             <>
-              {!product.is_sold && (
-                <>
-                  <Pressable
-                    style={[styles.messageBtn, (sendingInquiry || inquirySent) && styles.disabledBtn]}
-                    onPress={handlePurchaseInquiry}
-                    disabled={sendingInquiry || inquirySent}
-                  >
-                    <Text style={styles.messageBtnText}>
-                      {sendingInquiry ? t("purchaseInquirySending") : inquirySent ? t("purchaseInquirySent") : t("purchaseInquiry")}
-                    </Text>
-                  </Pressable>
-                  {inquiryMessage ? <Text style={styles.inquiryMessage}>{inquiryMessage}</Text> : null}
-                </>
-              )}
               <Pressable
-                style={styles.chatBtn}
-                onPress={handleMessageArtist}
-                disabled={startingChat}
+                style={[styles.messageBtn, (sendingInquiry || inquirySent) && styles.disabledBtn]}
+                onPress={handlePurchaseInquiry}
+                disabled={sendingInquiry || inquirySent}
               >
-                <Text style={styles.chatBtnText}>
-                  {startingChat ? "..." : t("chatWithArtist")}
+                <Text style={styles.messageBtnText}>
+                  {sendingInquiry ? t("purchaseInquirySending") : inquirySent ? t("purchaseInquirySent") : t("purchaseInquiry")}
                 </Text>
               </Pressable>
+              {inquiryMessage ? <Text style={styles.inquiryMessage}>{inquiryMessage}</Text> : null}
             </>
           )}
 
@@ -608,6 +601,24 @@ export default function ProductDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      {!isOwnProduct && (
+        <View style={[styles.stickyChatBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <Pressable
+            style={[styles.stickyChatButton, startingChat && styles.disabledBtn]}
+            onPress={handleMessageArtist}
+            disabled={startingChat}
+            accessibilityRole="button"
+          >
+            {startingChat ? (
+              <ActivityIndicator size="small" color={colors.accentText} />
+            ) : (
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.accentText} />
+            )}
+            <Text style={styles.stickyChatButtonText}>{t("chatWithArtist")}</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ShareSheet
         visible={shareSheetVisible}
@@ -705,11 +716,33 @@ function createStyles(
 ) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    productScroll: { flex: 1 },
     scrollContent: {
       paddingBottom: 48,
       alignItems: "center",
       paddingHorizontal: layout.isDesktop ? layout.horizontalPadding : 0,
     },
+    stickyChatBar: {
+      borderTopWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      paddingHorizontal: layout.isDesktop ? layout.horizontalPadding : 20,
+      paddingTop: 12,
+    },
+    stickyChatButton: {
+      width: "100%",
+      maxWidth: layout.maxContentWidth,
+      alignSelf: "center",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 9,
+      minHeight: 52,
+      borderRadius: 14,
+      backgroundColor: colors.accent,
+      ...shadow(2),
+    },
+    stickyChatButtonText: { color: colors.accentText, fontSize: 15, fontWeight: "700" },
     artistShortcut: {
       position: "absolute", top: 12, right: 16, zIndex: 10,
     },
@@ -777,11 +810,6 @@ function createStyles(
       alignItems: "center", marginTop: 16, ...shadow(2),
     },
     messageBtnText: { color: colors.accentText, fontWeight: "700", fontSize: 15 },
-    chatBtn: {
-      borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14,
-      alignItems: "center", marginTop: 12,
-    },
-    chatBtnText: { color: colors.text, fontWeight: "600", fontSize: 14 },
     contactBtn: {
       backgroundColor: "#25D366", borderRadius: 12, padding: 14,
       alignItems: "center", marginTop: 12, ...shadow(2),

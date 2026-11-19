@@ -38,6 +38,7 @@ const CATEGORIES = [
   { value: "calligraphy", label: "Calligraphy" },
   { value: "artisan_crafts", label: "Artisan Crafts" },
   { value: "hall_of_fame", label: "Hall of Fame" },
+  { value: "traditional_wear", label: "Traditional Wear" },
   { value: "other", label: "Other" },
 ];
 

@@ -534,6 +534,7 @@ sendResponseError: "Impossible d'envoyer votre réponse.",
     categoryCalligraphy: "Calligraphie",
     categoryArtisanCrafts: "Artisanat d'art",
     categoryHallOfFame: "Galerie d'honneur",
+    categoryTraditionalWear: "Tenues traditionnelles",
     categoryOther: "Autre",
 
     // Ambiances
@@ -1189,6 +1190,7 @@ subscriptionWarningBanner:  "You need to subscribe before the deadline, or you'l
     categoryCalligraphy: "Calligraphy",
     categoryArtisanCrafts: "Artisan Crafts",
     categoryHallOfFame: "Hall of Fame",
+    categoryTraditionalWear: "Traditional Wear",
     categoryOther: "Other",
 
     // Moods
@@ -1706,6 +1708,7 @@ subscriptionWarningBanner: "Debes suscribirte antes de la fecha límite, o perde
     categoryCalligraphy: "Caligrafía",
     categoryArtisanCrafts: "Artesanía",
     categoryHallOfFame: "Salón de la fama",
+    categoryTraditionalWear: "Vestimenta tradicional",
     categoryOther: "Otro",
 
     // Ambientes
@@ -2231,6 +2234,7 @@ subscriptionWarningBanner:  "يجب عليك الاشتراك قبل الموع�
     categoryCalligraphy: "خط عربي",
     categoryArtisanCrafts: "حرف يدوية",
     categoryHallOfFame: "قاعة المشاهير",
+    categoryTraditionalWear: "الملابس التقليدية",
     categoryOther: "أخرى",
 
     // المشاعر

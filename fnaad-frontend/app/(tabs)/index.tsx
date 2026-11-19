@@ -104,6 +104,7 @@ const CATEGORIES = [
   { value: "calligraphy", labelKey: "categoryCalligraphy" },
   { value: "artisan_crafts", labelKey: "categoryArtisanCrafts" },
   { value: "hall_of_fame", labelKey: "categoryHallOfFame" },
+  { value: "traditional_wear", labelKey: "categoryTraditionalWear" },
   { value: "other", labelKey: "categoryOther" },
 ];
 

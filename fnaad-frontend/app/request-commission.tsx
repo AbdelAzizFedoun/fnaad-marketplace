@@ -21,6 +21,7 @@ const CATEGORIES = [
   { value: "calligraphy", label: "Calligraphy" },
   { value: "artisan_crafts", label: "Artisan Crafts" },
   { value: "hall_of_fame", label: "Hall of Fame" },
+  { value: "traditional_wear", labelKey: "categoryTraditionalWear" },
   { value: "other", label: "Autre" },
 ];
 
@@ -114,7 +115,7 @@ export default function RequestCommissionScreen() {
                 onPress={() => setCategory(c.value)}
               >
                 <Text style={[styles.chipText, category === c.value && styles.chipTextSelected]}>
-                  {c.label}
+                  {c.labelKey ? t(c.labelKey) : c.label}
                 </Text>
               </Pressable>
             ))}

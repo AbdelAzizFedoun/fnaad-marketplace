@@ -33,6 +33,7 @@ class Product(models.Model):
     CATEGORY_CALLIGRAPHY = "calligraphy"
     CATEGORY_ARTISAN_CRAFTS = "artisan_crafts"
     CATEGORY_HALL_OF_FAME = "hall_of_fame"
+    CATEGORY_TRADITIONAL_WEAR = "traditional_wear"
     CATEGORY_OTHER = "other"
 
     CATEGORY_CHOICES = [
@@ -46,6 +47,7 @@ class Product(models.Model):
         (CATEGORY_CALLIGRAPHY, "Calligraphy"),
         (CATEGORY_ARTISAN_CRAFTS, "Artisan Crafts"),
         (CATEGORY_HALL_OF_FAME, "Hall of Fame"),
+        (CATEGORY_TRADITIONAL_WEAR, "Traditional Wear"),
         (CATEGORY_OTHER, "Other"),
     ]
 
