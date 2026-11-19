@@ -31,32 +31,32 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     def _media_url(self, field_value):
         """
-        Build a public media URL using request.build_absolute_uri if available,
-        falling back to settings.SITE_BASE_URL.
+        Build a public media URL.
+
+        When Cloudinary storage is active, field_value.url already returns the
+        correct CDN delivery URL — cloudinary_storage applies the PREFIX
+        automatically, so we must NOT add it again here.  For local dev, we
+        fall back to an absolute URL using the request or SITE_BASE_URL.
         """
         if not field_value:
             return None
+        # cloudinary_storage.storage.MediaCloudinaryStorage.url() returns a
+        # full https://res.cloudinary.com/… URL — just use it directly.
+        try:
+            url = field_value.url
+        except Exception:
+            return None
+        if url and (url.startswith("https://") or url.startswith("http://")):
+            return url
+        # Relative path (local dev): make it absolute.
         from django.conf import settings
-        if getattr(settings, "CLOUDINARY_URL", ""):
-            import cloudinary.utils
-            from pathlib import PurePosixPath
-            name = str(field_value.name).replace("\\", "/")
-            path = PurePosixPath(name)
-            public_id = f"fnaad/{path.with_suffix('').as_posix()}"
-            resource_url, _ = cloudinary.utils.cloudinary_url(
-                public_id,
-                secure=True,
-                resource_type="image",
-                format=path.suffix.lstrip(".") or None,
-            )
-            return resource_url
         request = self.context.get("request")
         if request:
-            return request.build_absolute_uri(field_value.url)
+            return request.build_absolute_uri(url)
         base = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
         if base:
-            return f"{base}{field_value.url}"
-        return field_value.url
+            return f"{base}{url}"
+        return url
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

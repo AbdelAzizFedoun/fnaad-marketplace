@@ -302,9 +302,6 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 for _csrf in [
-    "https://*.onrender.com",
-    "https://fnaad-api.onrender.com",
-    "https://fnaad-admin.onrender.com",
     "http://192.168.100.52:5173",
     "http://192.168.100.52:8000",
     "http://localhost:5173",
