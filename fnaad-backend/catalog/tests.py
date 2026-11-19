@@ -3,10 +3,11 @@ import base64
 import tempfile
 from datetime import timedelta
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
@@ -20,6 +21,38 @@ from accounts.models import (
     ArtistStudioStoryView,
 )
 from .models import Conversation, Message, Product
+from .serializers import ProductImageSerializer
+
+
+class ProductImageUrlTests(SimpleTestCase):
+    @override_settings(CLOUDINARY_STORAGE={"PREFIX": "fnaad"})
+    def test_cloudinary_url_removes_repeated_storage_prefix(self):
+        serializer = ProductImageSerializer()
+        duplicate_url = (
+            "https://res.cloudinary.com/example/image/upload/"
+            "v1/fnaad/fnaad/products/artwork.jpg"
+        )
+        valid_url = (
+            "https://res.cloudinary.com/example/image/upload/"
+            "v1/fnaad/products/artwork.jpg"
+        )
+        other_host_url = (
+            "https://cdn.example.com/image/upload/"
+            "v1/fnaad/fnaad/products/artwork.jpg"
+        )
+
+        self.assertEqual(
+            serializer._media_url(SimpleNamespace(url=duplicate_url)),
+            valid_url,
+        )
+        self.assertEqual(
+            serializer._media_url(SimpleNamespace(url=valid_url)),
+            valid_url,
+        )
+        self.assertEqual(
+            serializer._media_url(SimpleNamespace(url=other_host_url)),
+            other_host_url,
+        )
 
 
 class CatalogPermissionTests(APITestCase):

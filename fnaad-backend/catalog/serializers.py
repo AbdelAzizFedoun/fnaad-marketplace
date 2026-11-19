@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from datetime import timedelta
+from urllib.parse import urlsplit, urlunsplit
 
 
 ONLINE_THRESHOLD_SECONDS = 60
@@ -33,20 +34,40 @@ class ProductImageSerializer(serializers.ModelSerializer):
         """
         Build a public media URL.
 
-        When Cloudinary storage is active, field_value.url already returns the
-        correct CDN delivery URL — cloudinary_storage applies the PREFIX
-        automatically, so we must NOT add it again here.  For local dev, we
-        fall back to an absolute URL using the request or SITE_BASE_URL.
+        Cloudinary storage can include its configured prefix both in the
+        stored name and the generated URL. Collapse only repeated prefix
+        segments in Cloudinary URLs. For local dev, make relative URLs absolute.
         """
         if not field_value:
             return None
-        # cloudinary_storage.storage.MediaCloudinaryStorage.url() returns a
-        # full https://res.cloudinary.com/… URL — just use it directly.
+        # Cloudinary storage may apply PREFIX to a name that already contains it.
         try:
             url = field_value.url
         except Exception:
             return None
         if url and (url.startswith("https://") or url.startswith("http://")):
+            from django.conf import settings
+
+            prefix = str(
+                getattr(settings, "CLOUDINARY_STORAGE", {}).get("PREFIX", "")
+            ).strip("/")
+            parsed_url = urlsplit(url)
+            if (
+                prefix
+                and parsed_url.hostname
+                and (
+                    parsed_url.hostname == "cloudinary.com"
+                    or parsed_url.hostname.endswith(".cloudinary.com")
+                )
+            ):
+                duplicate_prefix = f"/{prefix}/{prefix}/"
+                normalized_path = parsed_url.path
+                while duplicate_prefix in normalized_path:
+                    normalized_path = normalized_path.replace(
+                        duplicate_prefix, f"/{prefix}/"
+                    )
+                if normalized_path != parsed_url.path:
+                    url = urlunsplit(parsed_url._replace(path=normalized_path))
             return url
         # Relative path (local dev): make it absolute.
         from django.conf import settings
