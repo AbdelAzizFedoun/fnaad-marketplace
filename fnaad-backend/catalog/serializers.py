@@ -95,11 +95,11 @@ class ProductSerializer(serializers.ModelSerializer):
             "artist_id", "artist_user_id", "artist_avatar", "artist_region", "artist_region_display", "artist_is_verified",
             "is_sold", "sold_at",
             "average_rating", "review_count", "like_count", "comment_count", "view_count",
-            "images", "created_at", "copy_of", "copy_confidence", "flagged_as_copy",
+            "images", "created_at", "copy_of", "copy_confidence", "flagged_as_copy", "rejection_reason",
             "verification_level", "creation_method", "passport_token", "originality_evidence_count"
             , "moods"
         ]
-        read_only_fields = ["status", "public_slug", "public_url", "created_at", "is_sold", "sold_at", "copy_of", "copy_confidence", "flagged_as_copy", "passport_token", "originality_evidence_count"]
+        read_only_fields = ["status", "public_slug", "public_url", "created_at", "is_sold", "sold_at", "copy_of", "copy_confidence", "flagged_as_copy", "rejection_reason", "passport_token", "originality_evidence_count"]
 
     def get_originality_evidence_count(self, obj):
         try:

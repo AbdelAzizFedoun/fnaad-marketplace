@@ -350,6 +350,10 @@ class ProductApproveView(generics.UpdateAPIView):
             # Make the artwork immediately visible in the public gallery.
             product.is_public_visible = True
             product.approved_at = tz.now()
+            product.flagged_as_copy = False
+            product.copy_of = None
+            product.copy_confidence = None
+            product.rejection_reason = ""
             title, body = "Artwork approved", f"\"{product.title}\" is now publicly visible."
         else:
             # Rejected artworks must not appear in the gallery.
@@ -357,7 +361,7 @@ class ProductApproveView(generics.UpdateAPIView):
             product.approved_at = None
             title, body = "Artwork rejected", f"\"{product.title}\" was not approved."
 
-        product.save(update_fields=["status", "is_public_visible", "approved_at"])
+        product.save(update_fields=["status", "is_public_visible", "approved_at", "flagged_as_copy", "copy_of", "copy_confidence", "rejection_reason"])
 
         create_notification(
             product.artist.user, title, body, "product_status",

@@ -19,6 +19,8 @@ type Product = {
   artist_is_verified?: boolean;
   category_display?: string;
   created_at?: string;
+  flagged_as_copy?: boolean;
+  rejection_reason?: string;
   images: { image: string; thumbnail?: string | null; is_primary: boolean }[];
 };
 
@@ -40,12 +42,20 @@ export default function Moderation() {
     adminApi.getEvidenceReviews().then((res) => setEvidenceReviews(res.data || [])).catch((err) => console.error("Evidence review error:", err));
   };
 
-  const handleCopyDecision = async (id: number, confirm: boolean) => {
+  const handleCopyDecision = async (id: number, action: "confirm" | "approve" | "pending") => {
     setDecidingId(id);
     try {
-      const response = confirm ? await adminApi.confirmCopy(id) : await adminApi.overruleCopy(id);
+      if (action === "confirm") {
+        await adminApi.confirmCopy(id);
+      } else if (action === "approve") {
+        await adminApi.overruleCopy(id, { approve: true });
+      } else {
+        const response = await adminApi.overruleCopy(id, { approve: false });
+        if (response.data?.status === "pending") {
+          setProducts((prev) => [...prev.filter((p) => p.id !== id), response.data]);
+        }
+      }
       setFlaggedCopies((prev) => prev.filter((p) => p.id !== id));
-      if (!confirm && response.data?.status === "pending") setProducts((prev) => [...prev, response.data]);
     } catch (err) {
       console.error("Copy decision error:", err);
     } finally {
@@ -97,19 +107,56 @@ export default function Moderation() {
         <section className="mb-8">
           <h3 className="font-display text-lg text-danger mb-2">Possible copies requiring review</h3>
           <div className="space-y-3">
-            {flaggedCopies.map((product) => (
-              <div key={product.id} className="border border-danger/40 bg-surface rounded-lg p-4 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-text font-semibold text-sm">{product.title}</p>
-                  <p className="text-muted text-xs mt-1">Artist: {product.artist_name || product.artist?.brand_name || "Unknown"}</p>
-                  <p className="text-danger text-xs mt-1">{product.rejection_reason || "Possible copy detected."}</p>
+            {flaggedCopies.map((product) => {
+              const images = [...(product.images || [])].sort(
+                (left, right) => Number(right.is_primary) - Number(left.is_primary),
+              );
+              return (
+                <div key={product.id} className="border border-danger/40 bg-surface rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {images.length > 0 ? (
+                      <MediaImage
+                        src={resolveMediaUrl(images[0].thumbnail || images[0].image) || ""}
+                        alt={product.title}
+                        className="w-16 h-16 rounded-md object-cover bg-bg shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-md bg-bg flex items-center justify-center text-faint text-[10px] shrink-0">
+                        No image
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-text font-semibold text-sm">{product.title}</p>
+                      <p className="text-muted text-xs mt-1">Artist: {product.artist_name || product.artist?.brand_name || "Unknown"}</p>
+                      <p className="text-danger text-xs mt-1">{product.rejection_reason || "Possible copy detected."}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <button
+                      onClick={() => handleCopyDecision(product.id, "approve")}
+                      disabled={decidingId === product.id}
+                      className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2 disabled:opacity-50"
+                    >
+                      Approve & Publish
+                    </button>
+                    <button
+                      onClick={() => handleCopyDecision(product.id, "pending")}
+                      disabled={decidingId === product.id}
+                      className="border border-border text-muted text-xs font-bold rounded-md px-3 py-2 disabled:opacity-50"
+                    >
+                      Send to Pending
+                    </button>
+                    <button
+                      onClick={() => handleCopyDecision(product.id, "confirm")}
+                      disabled={decidingId === product.id}
+                      className="bg-danger text-bg text-xs font-bold rounded-md px-3 py-2 disabled:opacity-50"
+                    >
+                      Confirm copy (Reject)
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => handleCopyDecision(product.id, true)} disabled={decidingId === product.id} className="bg-danger text-bg text-xs font-bold rounded-md px-3 py-2">Confirm copy</button>
-                  <button onClick={() => handleCopyDecision(product.id, false)} disabled={decidingId === product.id} className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2">Clear flag</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -176,7 +223,19 @@ export default function Moderation() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-text font-semibold text-sm">{product.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-text font-semibold text-sm">{product.title}</p>
+                    {product.flagged_as_copy && (
+                      <span className="bg-danger/10 text-danger text-[10px] font-bold px-2 py-0.5 rounded border border-danger/30">
+                        Possible copy flag
+                      </span>
+                    )}
+                  </div>
+                  {product.flagged_as_copy && product.rejection_reason && (
+                    <p className="text-danger text-xs mt-1 bg-danger/5 p-2 rounded border border-danger/20">
+                      {product.rejection_reason}
+                    </p>
+                  )}
                   <p className="text-muted text-xs mt-1">
                     {product.artist_name}
                     {product.artist_is_verified ? (

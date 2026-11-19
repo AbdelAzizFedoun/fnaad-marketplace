@@ -64,18 +64,38 @@ class OverruleCopyView(generics.UpdateAPIView):
         product.flagged_as_copy = False
         product.copy_of = None
         product.copy_confidence = None
-        product.status = Product.STATUS_PENDING
         product.rejection_reason = ''
-        product.save(update_fields=['flagged_as_copy', 'copy_of', 'copy_confidence', 'status', 'rejection_reason'])
+
+        site_settings = SiteSettings.get_solo()
+        should_approve = bool(request.data.get('approve', False)) or (not site_settings.require_product_approval)
+
+        if should_approve:
+            product.status = Product.STATUS_APPROVED
+            product.is_public_visible = True
+            product.approved_at = timezone.now()
+            action = ProductModerationEvent.ACTION_APPROVED
+            msg_body = f'"{product.title}" copy flag was cleared and your artwork is now publicly visible.'
+            status_val = Product.STATUS_APPROVED
+        else:
+            product.status = Product.STATUS_PENDING
+            product.is_public_visible = False
+            action = ProductModerationEvent.ACTION_OVERRULED_COPY
+            msg_body = f'"{product.title}" passed the copy review and is awaiting normal admin approval.'
+            status_val = Product.STATUS_PENDING
+
+        product.save(update_fields=[
+            'flagged_as_copy', 'copy_of', 'copy_confidence',
+            'status', 'rejection_reason', 'is_public_visible', 'approved_at'
+        ])
         ProductModerationEvent.objects.create(
             product=product, actor=request.user,
-            action=ProductModerationEvent.ACTION_OVERRULED_COPY,
-            reason=request.data.get('reason', 'Admin overruled automated copy detection.'),
+            action=action,
+            reason=request.data.get('reason', 'Admin cleared copy flag.' if should_approve else 'Admin overruled automated copy detection.'),
         )
         create_notification(
             product.artist.user, "Copy review cleared",
-            f'"{product.title}" passed the copy review and is awaiting normal admin approval.',
-            "product_status", {"product_id": product.id, "status": Product.STATUS_PENDING, "copy_confirmed": False},
+            msg_body,
+            "product_status", {"product_id": product.id, "status": status_val, "copy_confirmed": False},
         )
         return Response(ProductSerializer(product, context={'request': request}).data)
 

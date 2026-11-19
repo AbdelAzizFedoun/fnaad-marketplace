@@ -20,6 +20,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 from .views import api_root, favicon
+from catalog.admin_views import (
+    FlaggedCopiesListView, ConfirmCopyView, OverruleCopyView,
+    EvidenceReviewListView, EvidenceReviewDecisionView
+)
 try:
     from rest_framework_simplejwt.views import (
         TokenObtainPairView,
@@ -67,6 +71,12 @@ urlpatterns = [
     path("api/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("api/orders/", include("orders.urls")),
     path("api/billing/", include("billing.urls")),
+    # Direct admin aliases for moderation & copyright endpoints
+    path("api/admin/flagged-copies/", FlaggedCopiesListView.as_view(), name="alias-admin-flagged-copies"),
+    path("api/admin/flagged-copies/<int:pk>/confirm/", ConfirmCopyView.as_view(), name="alias-admin-flagged-confirm"),
+    path("api/admin/flagged-copies/<int:pk>/overrule/", OverruleCopyView.as_view(), name="alias-admin-flagged-overrule"),
+    path("api/admin/evidence-review/", EvidenceReviewListView.as_view(), name="alias-admin-evidence-review"),
+    path("api/admin/evidence-review/<int:pk>/decision/", EvidenceReviewDecisionView.as_view(), name="alias-admin-evidence-review-decision"),
     # Fallback routes without /api/ prefix
     path("accounts/", include("accounts.urls")),
     path("catalog/", include("catalog.urls")),

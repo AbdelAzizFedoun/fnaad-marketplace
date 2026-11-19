@@ -185,9 +185,9 @@ export const fetchMediaBlob = async (uri: string, signal: AbortSignal) => {
 };
 
 export const adminApi = {
-  getFlaggedCopies: () => api.get('/admin/flagged-copies/'),
-  confirmCopy: (id: number) => api.patch(`/admin/flagged-copies/${id}/confirm/`),
-  overruleCopy: (id: number) => api.patch(`/admin/flagged-copies/${id}/overrule/`),
-  getEvidenceReviews: () => api.get('/admin/evidence-review/'),
-  decideEvidence: (id: number, approved: boolean) => api.patch(`/admin/evidence-review/${id}/decision/`, { approved }),
+  getFlaggedCopies: () => api.get('/catalog/admin/flagged-copies/'),
+  confirmCopy: (id: number) => api.patch(`/catalog/admin/flagged-copies/${id}/confirm/`),
+  overruleCopy: (id: number, data?: { approve?: boolean }) => api.patch(`/catalog/admin/flagged-copies/${id}/overrule/`, data || {}),
+  getEvidenceReviews: () => api.get('/catalog/admin/evidence-review/'),
+  decideEvidence: (id: number, approved: boolean) => api.patch(`/catalog/admin/evidence-review/${id}/decision/`, { approved }),
 };
