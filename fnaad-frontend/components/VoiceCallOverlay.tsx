@@ -1,6 +1,7 @@
 import React from "react";
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { MediaStream } from "react-native-webrtc";
 import VoiceCallAudio from "./VoiceCallAudio";
 
@@ -43,8 +44,13 @@ export default function VoiceCallOverlay({
   onToggleMute,
   onDismiss,
 }: Props) {
+  const { width } = useWindowDimensions();
   const visible = phase !== "idle";
   const terminal = phase === "ended" || phase === "error";
+  const serverFailure = phase === "error" && /status code 5\d{2}/i.test(error);
+  const avatarSize = Math.min(132, Math.max(92, width * 0.32));
+  const actionSize = Math.min(68, Math.max(58, width * 0.17));
+  const actionGap = Math.min(44, width * 0.12);
   const title = phase === "incoming"
     ? t("voiceCallIncoming")
     : phase === "outgoing"
@@ -52,7 +58,9 @@ export default function VoiceCallOverlay({
       : phase === "connected"
         ? formatDuration(elapsedSeconds)
         : phase === "error"
-          ? error || t("voiceCallFailed")
+          ? serverFailure
+            ? t("voiceCallServerError")
+            : error || t("voiceCallFailed")
           : phase === "ended"
             ? t("voiceCallEnded")
             : t("voiceCallConnecting");
@@ -61,37 +69,82 @@ export default function VoiceCallOverlay({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={phase === "incoming" ? onDecline : onEnd}>
       <View style={[styles.backdrop, { backgroundColor: colors.background }]}>
         {remoteStream && <VoiceCallAudio stream={remoteStream} accessibilityLabel={t("voiceCallRemoteAudio")} />}
-        <View style={[styles.avatar, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
-          <Ionicons name="person" size={48} color={colors.accent} />
-        </View>
-        <Text style={[styles.name, { color: colors.text }]}>{remoteName}</Text>
-        <Text style={[styles.status, { color: colors.textMuted }]}>{title}</Text>
-        {phase === "error" && Platform.OS !== "web" && (
-          <Text style={[styles.errorHint, { color: colors.textMuted }]}>{t("voiceCallNetworkHint")}</Text>
-        )}
-        <View style={styles.actions}>
-          {phase === "incoming" ? (
-            <>
-              <CallButton icon="close" label={t("voiceCallDecline")} color="#B0524F" onPress={onDecline} />
-              <CallButton icon="call" label={t("voiceCallAnswer")} color="#39835A" onPress={onAccept} />
-            </>
-          ) : terminal ? (
-            <CallButton icon="close" label={t("voiceCallClose")} color={colors.surface} iconColor={colors.text} onPress={onDismiss} />
-          ) : (
-            <>
-              {(phase === "connected" || phase === "connecting") && (
-                <CallButton
-                  icon={muted ? "mic-off" : "mic"}
-                  label={muted ? t("voiceCallUnmute") : t("voiceCallMute")}
-                  color={colors.surface}
-                  iconColor={colors.text}
-                  onPress={onToggleMute}
+        <SafeAreaView style={styles.safeArea}>
+          <ScrollView contentContainerStyle={styles.content} bounces={false}>
+            <View style={styles.identity}>
+              <View
+                style={[
+                  styles.avatarHalo,
+                  {
+                    width: avatarSize + 24,
+                    height: avatarSize + 24,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.accent,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.avatar,
+                    {
+                      width: avatarSize,
+                      height: avatarSize,
+                      borderRadius: avatarSize / 2,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                >
+                  <Ionicons name="person" size={avatarSize * 0.42} color={colors.accent} />
+                </View>
+              </View>
+              <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
+                {remoteName}
+              </Text>
+              <View style={[styles.statusPill, { backgroundColor: colors.surface }]}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: phase === "error" ? "#B0524F" : phase === "connected" ? "#39835A" : colors.accent },
+                  ]}
                 />
+                <Text style={[styles.status, { color: colors.textMuted }]}>{title}</Text>
+              </View>
+              {phase === "error" && Platform.OS !== "web" && (
+                <View style={[styles.errorCard, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="alert-circle-outline" size={20} color="#B0524F" />
+                  <Text style={[styles.errorHint, { color: colors.textMuted }]}>
+                    {t(serverFailure ? "voiceCallServerHint" : "voiceCallNetworkHint")}
+                  </Text>
+                </View>
               )}
-              <CallButton icon="call" label={t("voiceCallEnd")} color="#B0524F" onPress={onEnd} />
-            </>
-          )}
-        </View>
+            </View>
+            <View style={[styles.actions, { columnGap: actionGap }]}>
+              {phase === "incoming" ? (
+                <>
+                  <CallButton icon="close" label={t("voiceCallDecline")} color="#B0524F" size={actionSize} textColor={colors.text} onPress={onDecline} />
+                  <CallButton icon="call" label={t("voiceCallAnswer")} color="#39835A" size={actionSize} textColor={colors.text} onPress={onAccept} />
+                </>
+              ) : terminal ? (
+                <CallButton icon="close" label={t("voiceCallClose")} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={onDismiss} />
+              ) : (
+                <>
+                  {(phase === "connected" || phase === "connecting") && (
+                    <CallButton
+                      icon={muted ? "mic-off" : "mic"}
+                      label={muted ? t("voiceCallUnmute") : t("voiceCallMute")}
+                      color={colors.surface}
+                      iconColor={colors.text}
+                      size={actionSize}
+                      textColor={colors.text}
+                      onPress={onToggleMute}
+                    />
+                  )}
+                  <CallButton icon="call" label={t("voiceCallEnd")} color="#B0524F" size={actionSize} textColor={colors.text} onPress={onEnd} />
+                </>
+              )}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
       </View>
     </Modal>
   );
@@ -102,32 +155,74 @@ function CallButton({
   label,
   color,
   iconColor = "#FFFFFF",
+  size,
+  textColor,
   onPress,
 }: {
   icon: "close" | "call" | "mic" | "mic-off";
   label: string;
   color: string;
   iconColor?: string;
+  size: number;
+  textColor: string;
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.action} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
-      <View style={[styles.actionIcon, { backgroundColor: color }]}>
+    <Pressable
+      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={[styles.actionIcon, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
-      <Text style={styles.actionLabel}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: textColor }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28 },
-  avatar: { width: 112, height: 112, borderRadius: 56, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  name: { fontSize: 24, fontWeight: "700", marginTop: 24, textAlign: "center" },
-  status: { fontSize: 15, marginTop: 10, textAlign: "center" },
-  errorHint: { fontSize: 13, marginTop: 8, textAlign: "center" },
-  actions: { flexDirection: "row", justifyContent: "center", gap: 48, marginTop: 68 },
-  action: { alignItems: "center", minWidth: 72 },
-  actionIcon: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  actionLabel: { color: "#FFFFFF", fontSize: 12, marginTop: 10, textAlign: "center" },
+  backdrop: { flex: 1 },
+  safeArea: { flex: 1 },
+  content: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 480,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+  },
+  identity: { flex: 1, minHeight: 260, width: "100%", alignItems: "center", justifyContent: "center" },
+  avatarHalo: { borderWidth: 1, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  avatar: { alignItems: "center", justifyContent: "center" },
+  name: { fontSize: 26, fontWeight: "700", marginTop: 24, textAlign: "center", maxWidth: "100%" },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 14,
+  },
+  statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 8 },
+  status: { fontSize: 15, textAlign: "center" },
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 18,
+    maxWidth: 360,
+  },
+  errorHint: { flex: 1, fontSize: 13, marginLeft: 8, textAlign: "center" },
+  actions: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 24 },
+  action: { alignItems: "center", justifyContent: "center", minWidth: 76, minHeight: 84 },
+  actionPressed: { opacity: 0.72 },
+  actionIcon: { alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 12, marginTop: 10, textAlign: "center" },
 });

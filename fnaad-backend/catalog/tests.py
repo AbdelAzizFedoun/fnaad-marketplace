@@ -305,6 +305,21 @@ class CatalogPermissionTests(APITestCase):
                 self.assertTrue(response.data["image"].endswith(saved_image.image.url))
                 self.assertTrue(response.data["thumbnail"].endswith(saved_image.thumbnail.url))
 
+    def test_conversation_participant_can_start_voice_call(self):
+        conversation = Conversation.objects.create(
+            product=self.product,
+            customer=self.customer,
+        )
+        self.authenticate(self.customer)
+
+        response = self.client.post(
+            reverse("voice-call-start", args=[conversation.id]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], "ringing")
+        self.assertEqual(response.data["recipient"], self.artist.id)
+
     def test_public_gallery_and_detail_only_expose_approved_products(self):
         response = self.client.get(reverse("product-list"))
         product_ids = {item["id"] for item in response.data}
