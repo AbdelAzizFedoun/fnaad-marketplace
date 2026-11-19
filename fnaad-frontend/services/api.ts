@@ -313,6 +313,19 @@ export const resolveMediaUrl = (path?: string | null) => {
       return url.toString();
     }
 
+    const apiHost = new URL(base).hostname;
+    const isBackendHost =
+      url.hostname === apiHost ||
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname.endsWith(".railway.app") ||
+      url.hostname.endsWith(".railway.internal") ||
+      url.hostname.endsWith(".local") ||
+      /^10\./.test(url.hostname) ||
+      /^192\.168\./.test(url.hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(url.hostname);
+    if (!isBackendHost) return url.toString();
+
     // ── Web: proxy /media/* through the Cloudflare Worker ─────────────────
     // The Railway backend returns `Access-Control-Allow-Origin: null` for
     // /media/ files, which makes browsers block cross-origin <img> loads.
