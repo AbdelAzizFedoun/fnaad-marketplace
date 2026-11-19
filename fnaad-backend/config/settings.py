@@ -15,6 +15,9 @@ import os
 import warnings
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 mimetypes.add_type("image/webp", ".webp")
@@ -328,26 +331,115 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # ── Media / File Storage ─────────────────────────────────────────────────────
-# In production (CLOUDINARY_URL is set), files are uploaded to Cloudinary so
-# they survive Railway redeploys. Without the env var, Django falls back to
-# the local filesystem for local development.
-
 CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "")
-
 if CLOUDINARY_URL:
-    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
-    STORAGES = {
-        "default": {
-            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
-    }
     CLOUDINARY_STORAGE = {
         "MEDIA_TAG": "fnaad-media",
         "PREFIX": "fnaad",
     }
+
+PRODUCT_MEDIA_STORAGE_BACKEND = os.getenv(
+    "PRODUCT_MEDIA_STORAGE_BACKEND",
+    "cloudinary" if CLOUDINARY_URL else "local",
+).strip().lower()
+
+R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "").strip()
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "").strip()
+R2_PUBLIC_BASE_URL = os.getenv("R2_PUBLIC_BASE_URL", "").strip().rstrip("/")
+R2_ENDPOINT_URL = (
+    f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    if R2_ACCOUNT_ID
+    else ""
+)
+R2_CREDENTIALS_CONFIGURED = all(
+    [R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME]
+)
+
+default_media_storage = {
+    "BACKEND": (
+        "cloudinary_storage.storage.MediaCloudinaryStorage"
+        if CLOUDINARY_URL
+        else "django.core.files.storage.FileSystemStorage"
+    )
+}
+product_media_storage = default_media_storage
+
+if PRODUCT_MEDIA_STORAGE_BACKEND == "cloudinary":
+    if not CLOUDINARY_URL:
+        raise ImproperlyConfigured(
+            "CLOUDINARY_URL is required when PRODUCT_MEDIA_STORAGE_BACKEND=cloudinary."
+        )
+elif PRODUCT_MEDIA_STORAGE_BACKEND == "local":
+    product_media_storage = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    }
+elif PRODUCT_MEDIA_STORAGE_BACKEND == "r2":
+    missing_r2_settings = [
+        name
+        for name, value in (
+            ("R2_ACCOUNT_ID", R2_ACCOUNT_ID),
+            ("R2_ACCESS_KEY_ID", R2_ACCESS_KEY_ID),
+            ("R2_SECRET_ACCESS_KEY", R2_SECRET_ACCESS_KEY),
+            ("R2_BUCKET_NAME", R2_BUCKET_NAME),
+            ("R2_PUBLIC_BASE_URL", R2_PUBLIC_BASE_URL),
+        )
+        if not value
+    ]
+    if missing_r2_settings:
+        raise ImproperlyConfigured(
+            "Cloudflare R2 storage is missing: " + ", ".join(missing_r2_settings)
+        )
+    public_url = urlsplit(R2_PUBLIC_BASE_URL)
+    if (
+        public_url.scheme != "https"
+        or not public_url.netloc
+        or public_url.path not in ("", "/")
+        or public_url.query
+        or public_url.fragment
+    ):
+        raise ImproperlyConfigured(
+            "R2_PUBLIC_BASE_URL must be an HTTPS origin without a path or query."
+        )
+    product_media_storage = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": R2_ACCESS_KEY_ID,
+            "secret_key": R2_SECRET_ACCESS_KEY,
+            "bucket_name": R2_BUCKET_NAME,
+            "endpoint_url": R2_ENDPOINT_URL,
+            "region_name": "auto",
+            "signature_version": "s3v4",
+            "addressing_style": "path",
+            "custom_domain": public_url.netloc,
+            "url_protocol": "https:",
+            "querystring_auth": False,
+            "default_acl": None,
+            "file_overwrite": False,
+            "object_parameters": {
+                "CacheControl": "public, max-age=31536000, immutable",
+            },
+        },
+    }
+else:
+    raise ImproperlyConfigured(
+        "PRODUCT_MEDIA_STORAGE_BACKEND must be local, cloudinary, or r2."
+    )
+
+if PRODUCT_MEDIA_STORAGE_BACKEND == "r2" and not CLOUDINARY_URL:
+    raise ImproperlyConfigured(
+        "CLOUDINARY_URL is required for non-product media during the R2 migration."
+    )
+
+DEFAULT_FILE_STORAGE = default_media_storage["BACKEND"]
+STORAGES = {
+    "default": default_media_storage,
+    "product_media": product_media_storage,
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

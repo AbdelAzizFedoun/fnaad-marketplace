@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import models  # type: ignore
 from django.core.validators import MinValueValidator  # type: ignore
 from accounts.models import ArtistProfile  # type: ignore
+from .storage import product_media_storage
 
 
 def generate_product_slug():
@@ -154,8 +155,12 @@ class CreationEvidence(models.Model):
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to="products/")
-    thumbnail = models.ImageField(upload_to="products/thumbnails/", blank=True)
+    image = models.ImageField(upload_to="products/", storage=product_media_storage)
+    thumbnail = models.ImageField(
+        upload_to="products/thumbnails/",
+        storage=product_media_storage,
+        blank=True,
+    )
     is_primary = models.BooleanField(default=False)
     order = models.PositiveSmallIntegerField(default=0)
     # Image hash fields for duplicate detection

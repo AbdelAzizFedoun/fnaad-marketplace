@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl, Image as NativeImage, PanResponder, Share } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, ScrollView, TextInput, Modal, RefreshControl, Image as NativeImage, Share } from "react-native";
 import Image from "../../components/MediaImage";
 import type { DimensionValue } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
@@ -32,6 +32,7 @@ type Product = {
   artist_region: string | null;
   artist_region_display: string | null;
   artist_is_verified: boolean;
+  created_at?: string;
   moods?: string[];
   verification_level?: string;
   originality_evidence_count?: number;
@@ -85,12 +86,6 @@ function formatStoryAge(value: string, t: (key: string, params?: Record<string, 
   if (days < 7) return t("storyDaysAgo", { count: String(days) });
   return new Date(value).toLocaleDateString();
 }
-
-const SHOWCASE_INFO = [
-  { eyebrowKey: "showcaseEyebrowArtists", titleKey: "showcaseTitleArtists", subtitleKey: "showcaseSubtitleArtists" },
-  { eyebrowKey: "showcaseEyebrowOriginality", titleKey: "showcaseTitleOriginality", subtitleKey: "showcaseSubtitleOriginality" },
-  { eyebrowKey: "showcaseEyebrowTomorrow", titleKey: "showcaseTitleTomorrow", subtitleKey: "showcaseSubtitleTomorrow" },
-];
 
 const CATEGORIES = [
   { value: "", labelKey: "allCategories" },
@@ -169,7 +164,6 @@ export default function GalleryScreen() {
   const [filterVisible, setFilterVisible] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [spotlight, setSpotlight] = useState<SpotlightProduct[]>([]);
-  const [spotlightLoading, setSpotlightLoading] = useState(true);
   const [stories, setStories] = useState<ArtistStory[]>([]);
   const [activeStoryArtistId, setActiveStoryArtistId] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
@@ -182,16 +176,8 @@ export default function GalleryScreen() {
   const [storyActionError, setStoryActionError] = useState("");
   const recordedStoryViews = useRef(new Set<number>());
   const [countdownNow, setCountdownNow] = useState(Date.now());
-  const [showcaseIndex, setShowcaseIndex] = useState(0);
-  const spotlightPanResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderRelease: (_, gesture) => {
-      if (Math.abs(gesture.dx) > 45 && showcaseItems.length > 1) setShowcaseIndex((current) => gesture.dx < 0 ? (current + 1) % showcaseItems.length : (current - 1 + showcaseItems.length) % showcaseItems.length);
-    },
-  })).current;
 
   const activeFilterCount = [selectedRegion, selectedCategory, selectedSort !== "newest"].filter(Boolean).length;
-  const showcaseItems = [...SHOWCASE_INFO, ...spotlight];
   const storiesByArtist = new Map<number, ArtistStory[]>();
   for (const story of stories) {
     const artistStories = storiesByArtist.get(story.artist_id) || [];
@@ -204,6 +190,49 @@ export default function GalleryScreen() {
     artistAvatar: media[0].artist_avatar,
     media: media.sort((first, second) => first.created_at.localeCompare(second.created_at)),
   }));
+  const dayNumber = Math.floor(new Date(countdownNow).setHours(0, 0, 0, 0) / 86_400_000);
+  const newestProducts = [...products].sort((first, second) => {
+    const firstCreated = Date.parse(first.created_at || "") || 0;
+    const secondCreated = Date.parse(second.created_at || "") || 0;
+    return secondCreated - firstCreated;
+  });
+  const productsWithImages = newestProducts.filter((product) =>
+    product.images?.some((image) => image.image)
+  );
+  const activeSpotlights = spotlight.filter((item) => {
+    if (!item.spotlight_expires_at) return true;
+    const expiresAt = new Date(item.spotlight_expires_at).getTime();
+    return !Number.isFinite(expiresAt) || expiresAt > countdownNow;
+  });
+  const discoveryPool: SpotlightProduct[] = activeSpotlights.length
+    ? activeSpotlights
+    : productsWithImages.length
+      ? productsWithImages
+      : newestProducts;
+  const dailyDiscovery = discoveryPool.length
+    ? discoveryPool[((dayNumber % discoveryPool.length) + discoveryPool.length) % discoveryPool.length]
+    : null;
+  const isSpotlightDiscovery = dailyDiscovery
+    ? activeSpotlights.some((item) => item.id === dailyDiscovery.id)
+    : false;
+  const discoveryImage = dailyDiscovery?.images?.find((image) => image.is_primary)
+    || dailyDiscovery?.images?.[0];
+  const spotlightExpiry = isSpotlightDiscovery && dailyDiscovery?.spotlight_expires_at
+    ? new Date(dailyDiscovery.spotlight_expires_at).getTime()
+    : NaN;
+  const spotlightRemaining = Number.isFinite(spotlightExpiry)
+    ? Math.max(0, spotlightExpiry - countdownNow)
+    : 0;
+  const spotlightHours = Math.floor(spotlightRemaining / 3_600_000);
+  const spotlightMinutes = Math.floor((spotlightRemaining % 3_600_000) / 60_000);
+  const tomorrow = new Date(countdownNow);
+  tomorrow.setHours(24, 0, 0, 0);
+  const dailyRefreshRemaining = Math.max(0, tomorrow.getTime() - countdownNow);
+  const dailyRefreshHours = Math.floor(dailyRefreshRemaining / 3_600_000);
+  const dailyRefreshMinutes = Math.floor((dailyRefreshRemaining % 3_600_000) / 60_000);
+  const hasDiscoveryRating = Boolean(
+    dailyDiscovery?.review_count && dailyDiscovery.average_rating !== null
+  );
   const activeStoryGroup = storyArtists.find((artist) => artist.artistId === activeStoryArtistId);
   const activeStory = activeStoryGroup?.media[activeStoryIndex];
 
@@ -216,7 +245,6 @@ export default function GalleryScreen() {
           const parsed = JSON.parse(cached) as { savedAt: number; items: SpotlightProduct[] };
           if (Date.now() - parsed.savedAt < 60_000) {
             setSpotlight(parsed.items);
-            setSpotlightLoading(false);
           }
         }
         const res = await api.get("/catalog/spotlight/", { skipAuth: true } as any);
@@ -226,8 +254,6 @@ export default function GalleryScreen() {
         await Promise.all(items.slice(0, 6).flatMap((item) => (item.images || []).slice(0, 2).map((image) => image.image ? NativeImage.prefetch(resolveMediaUrl(image.image)!) : Promise.resolve(false))));
       } catch {
         setSpotlight((current) => current);
-      } finally {
-        setSpotlightLoading(false);
       }
     };
     void loadSpotlight();
@@ -277,15 +303,6 @@ export default function GalleryScreen() {
       });
   }, [activeStory?.id]);
 
-  useEffect(() => {
-    if (showcaseItems.length < 2) return;
-    const timer = setInterval(() => setShowcaseIndex((current) => (current + 1) % showcaseItems.length), 6500);
-    return () => clearInterval(timer);
-  }, [spotlight.length]);
-
-  useEffect(() => {
-    if (showcaseIndex >= showcaseItems.length) setShowcaseIndex(0);
-  }, [showcaseItems.length, showcaseIndex]);
   useEffect(() => { const timer = setInterval(() => setCountdownNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
 
   useEffect(() => {
@@ -621,7 +638,10 @@ export default function GalleryScreen() {
           {[
             { label: t("discover"), onPress: () => { setSelectedCategory(""); setSelectedMood(""); } },
             { label: t("artistsNav"), onPress: () => setSelectedSort("rating") },
-            { label: t("spotlight"), onPress: () => setShowcaseIndex(Math.min(SHOWCASE_INFO.length, showcaseItems.length - 1)) },
+            ...(dailyDiscovery ? [{
+              label: t("dailyDiscoveryQuickNav"),
+              onPress: () => router.push(`/product/${dailyDiscovery.id}`),
+            }] : []),
             { label: t("forMyHome"), onPress: () => setSelectedMood("home_decor") },
           ].map((item) => (
             <Pressable key={item.label} onPress={item.onPress} style={styles.quickNavItem}>
@@ -630,8 +650,16 @@ export default function GalleryScreen() {
           ))}
         </ScrollView>
         <View style={styles.galleryStatus}>
-          <View style={styles.galleryStatusDot} />
-          <Text style={styles.galleryStatusText}>{t("todayAtFnaad", { count: String(spotlight.length) })}</Text>
+          {activeSpotlights.length > 0
+            ? <View style={styles.galleryStatusDot} />
+            : <Ionicons name={dailyDiscovery ? "sparkles-outline" : "time-outline"} size={12} color={colors.accent} />}
+          <Text style={styles.galleryStatusText}>
+            {activeSpotlights.length
+              ? t("todayAtFnaad", { count: String(activeSpotlights.length) })
+              : dailyDiscovery
+                ? t("dailyDiscoveryStatus")
+                : t("dailyDiscoveryEmptySubtitle")}
+          </Text>
         </View>
 
         <Modal visible={filterVisible} animationType="slide" transparent onRequestClose={() => setFilterVisible(false)}>
@@ -938,21 +966,100 @@ export default function GalleryScreen() {
                   </View>
                 )}
                 {!debouncedSearch && !selectedCategory && !selectedRegion && (() => {
-                  const item = showcaseItems[showcaseIndex];
-                  const spotlightItem = item && !("eyebrow" in item) ? item as SpotlightProduct : null;
-                  const infoItem = !spotlightItem ? item as typeof SHOWCASE_INFO[number] : null;
-                  const primaryImage = spotlightItem?.images?.find((image) => image.is_primary) || spotlightItem?.images?.[0];
-                  const remaining = spotlightItem?.spotlight_expires_at ? Math.max(0, new Date(spotlightItem.spotlight_expires_at).getTime() - countdownNow) : 0;
-                  const remainingHours = Math.floor(remaining / 3600000);
-                  const remainingMinutes = Math.floor((remaining % 3600000) / 60000);
-                  return <View {...spotlightPanResponder.panHandlers} style={[styles.welcomeHero, spotlightItem && styles.welcomeHeroSpotlight, spotlightItem && styles.spotlightHero]}>
-                    {spotlightItem && <Image source={require("../../assets/logo-full-transparent.png")} style={styles.spotlightWatermark} resizeMode="contain" />}
-                    {primaryImage?.image ? <Image source={{ uri: resolveMediaUrl(primaryImage.image)! }} style={styles.heroSpotlightImage} resizeMode="cover" /> : null}
-                    <View style={styles.heroContent}><Text style={styles.heroEyebrow}>{spotlightItem ? t("spotlightHeroEyebrow") : infoItem ? t(infoItem.eyebrowKey) : ""}</Text><Text style={styles.heroTitle}>{spotlightItem?.title || (infoItem ? t(infoItem.titleKey) : "")}</Text><Text style={styles.heroSubtitle}>{spotlightItem ? `${t("byArtist")} ${spotlightItem.artist_name || t("unknownArtist")} · ${spotlightItem.average_rating?.toFixed(1) || "5.0"} ★` : infoItem ? t(infoItem.subtitleKey) : ""}</Text><Pressable style={styles.heroButton} onPress={() => spotlightItem ? router.push(`/product/${spotlightItem.id}`) : setSelectedCategory("painting")}><Text style={styles.heroButtonText}>{spotlightItem ? t("viewArtwork") : t("browseArtworks")}</Text><Ionicons name="arrow-forward" size={15} color={colors.accentText} /></Pressable></View>
-                    {showcaseItems.length > 1 && <View style={styles.showcaseDots}>{showcaseItems.map((_, index) => <Pressable key={index} onPress={() => setShowcaseIndex(index)} style={[styles.showcaseDot, index === showcaseIndex && styles.showcaseDotActive]} />)}</View>}
-                  </View>;
+                  if (!dailyDiscovery) {
+                    return (
+                      <View style={[styles.welcomeHero, styles.spotlightHero, styles.heroEmpty]}>
+                        <View style={styles.heroContent}>
+                          <Text style={styles.heroEyebrow}>{t("dailyDiscoveryEyebrow")}</Text>
+                          <Text style={styles.heroTitle}>{t("dailyDiscoveryEmptyTitle")}</Text>
+                          <Text style={styles.heroSubtitle}>{t("dailyDiscoveryEmptySubtitle")}</Text>
+                          <Pressable style={styles.heroButton} onPress={() => router.push("/role-select")}>
+                            <Text style={styles.heroButtonText}>{t("becomeArtist")}</Text>
+                            <Ionicons name="arrow-forward" size={15} color={colors.accentText} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  const artistAndRegion = [
+                    dailyDiscovery.artist_name || t("unknownArtist"),
+                    dailyDiscovery.artist_region_display,
+                  ].filter(Boolean).join(" · ");
+
+                  return (
+                    <View style={[styles.welcomeHero, styles.welcomeHeroSpotlight, styles.spotlightHero]}>
+                      <Image
+                        source={require("../../assets/logo-full-transparent.png")}
+                        style={styles.spotlightWatermark}
+                        resizeMode="contain"
+                      />
+                      {discoveryImage?.image ? (
+                        <Image
+                          source={{ uri: resolveMediaUrl(discoveryImage.image)! }}
+                          style={styles.heroSpotlightImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.heroImageFallback}>
+                          <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+                        </View>
+                      )}
+                      <View style={styles.heroContent}>
+                        <Text style={styles.heroEyebrow}>
+                          {isSpotlightDiscovery ? t("spotlightHeroEyebrow") : t("dailyGalleryPickEyebrow")}
+                        </Text>
+                        <Text style={styles.heroTitle} numberOfLines={2}>{dailyDiscovery.title}</Text>
+                        <Text style={styles.heroSubtitle} numberOfLines={1}>
+                          {t("byArtist")} {artistAndRegion}
+                        </Text>
+                        <View style={styles.heroRatingRow}>
+                          <Ionicons
+                            name={hasDiscoveryRating ? "star" : "star-outline"}
+                            size={12}
+                            color={hasDiscoveryRating ? "#F5A623" : colors.textMuted}
+                          />
+                          <Text style={styles.heroRatingText}>
+                            {hasDiscoveryRating
+                              ? `${dailyDiscovery.average_rating?.toFixed(1)} (${dailyDiscovery.review_count})`
+                              : t("beFirstToReview")}
+                          </Text>
+                        </View>
+                        {isSpotlightDiscovery && spotlightRemaining > 0 ? (
+                          <Text style={styles.spotlightCountdown}>
+                            {t("spotlightEndsIn", {
+                              hours: String(spotlightHours),
+                              minutes: String(spotlightMinutes),
+                            })}
+                          </Text>
+                        ) : !isSpotlightDiscovery && discoveryPool.length > 1 ? (
+                          <Text style={styles.spotlightCountdown}>
+                            {t("newDiscoveryIn", {
+                              hours: String(dailyRefreshHours),
+                              minutes: String(dailyRefreshMinutes),
+                            })}
+                          </Text>
+                        ) : null}
+                        <Pressable
+                          style={styles.heroButton}
+                          onPress={() => router.push(`/product/${dailyDiscovery.id}`)}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.heroButtonText}>{t("viewArtwork")}</Text>
+                          <Ionicons name="arrow-forward" size={15} color={colors.accentText} />
+                        </Pressable>
+                        <Pressable
+                          style={styles.heroArtistLink}
+                          onPress={() => router.push(`/artist/${dailyDiscovery.artist_id}`)}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.heroArtistLinkText}>{t("meetArtist")}</Text>
+                          <Ionicons name="arrow-forward" size={13} color={colors.accent} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
                 })()}
-                {!debouncedSearch && products.length > 0 && (() => { const featured = products[0]; const image = featured.images?.find((item) => item.is_primary) || featured.images?.[0]; return <Pressable style={styles.featuredCard} onPress={() => router.push(`/product/${featured.id}`)}><Image source={image?.image ? { uri: resolveMediaUrl(image.image)! } : undefined} style={styles.featuredImage} resizeMode="cover" /><View style={styles.featuredOverlay}><Text style={styles.featuredEyebrow}>{t("featuredToday")}</Text><Text style={styles.featuredTitle}>{featured.title}</Text><Text style={styles.featuredArtist}>{t("byArtist")} {featured.artist_name}{featured.artist_region_display ? ` · ${featured.artist_region_display}` : ""}</Text></View></Pressable>; })()}
                 {!debouncedSearch && <><Text style={styles.sectionTitle}>{t("findYourMood")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.moodRow}>{[{ label: t("mood_african_heritage"), value: "african_heritage", icon: "earth-outline" }, { label: t("mood_calm"), value: "calm", icon: "leaf-outline" }, { label: t("mood_bold"), value: "bold", icon: "flash-outline" }, { label: t("mood_home_decor"), value: "home_decor", icon: "home-outline" }].map((mood) => <Pressable key={mood.value} style={[styles.moodChip, selectedMood === mood.value && styles.moodChipSelected]} onPress={() => setSelectedMood(selectedMood === mood.value ? "" : mood.value)}><Ionicons name={mood.icon as any} size={16} color={colors.accent} /><Text style={styles.moodText}>{mood.label}</Text></Pressable>)}</ScrollView><View style={styles.trustBanner}><Ionicons name="shield-checkmark-outline" size={20} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.trustTitle}>{t("originalArtMaker")}</Text><Text style={styles.trustText}>{t("passportAvailable")}</Text></View></View></>}
               </View>
             }
@@ -1311,26 +1418,23 @@ function createStyles(
       position: "relative",
     },
     welcomeHeroSpotlight: { paddingRight: layout.isSmallPhone ? 90 : 120 },
-    spotlightHero: { minHeight: layout.isSmallPhone ? 190 : 220, backgroundColor: colors.background },
+    spotlightHero: { minHeight: layout.isSmallPhone ? 270 : 280, backgroundColor: colors.background },
+    heroEmpty: { minHeight: layout.isSmallPhone ? 220 : 230 },
     spotlightWatermark: { position: "absolute", right: 28, top: 18, width: 150, height: 42, opacity: 0.18, zIndex: 2 },
     spotlightCountdown: { color: colors.accent, fontSize: 11, fontWeight: "800", marginTop: 8 },
     heroSpotlightImage: { position: "absolute", right: 0, top: 0, bottom: 0, width: layout.isSmallPhone ? 90 : 120, opacity: 0.82 },
+    heroImageFallback: { position: "absolute", right: 0, top: 0, bottom: 0, width: layout.isSmallPhone ? 90 : 120, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
     heroContent: { flex: 1, zIndex: 1 },
-    showcaseDots: { position: "absolute", right: 16, bottom: 14, flexDirection: "row", gap: 5 },
-    showcaseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
-    showcaseDotActive: { width: 18, backgroundColor: colors.accent },
     heroEyebrow: { color: colors.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
     heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: layout.isSmallPhone ? 21 : 27, lineHeight: layout.isSmallPhone ? 26 : 32, fontWeight: "700", marginTop: 7 },
     heroSubtitle: { color: colors.textMuted, fontSize: layout.isSmallPhone ? 12 : 13, lineHeight: layout.isSmallPhone ? 17 : 19, marginTop: 7, maxWidth: 290 },
+    heroRatingRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+    heroRatingText: { color: colors.textMuted, fontSize: 11, fontWeight: "600", flexShrink: 1 },
     heroButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.accent, borderRadius: RADIUS.pill, paddingVertical: 10, paddingHorizontal: 14, marginTop: 14 },
     heroButtonText: { color: colors.accentText, fontSize: 12, fontWeight: "800" },
+    heroArtistLink: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, marginTop: 2 },
+    heroArtistLinkText: { color: colors.accent, fontSize: 12, fontWeight: "800" },
     heroMark: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", marginLeft: 8 },
-    featuredCard: { height: layout.isSmallPhone ? 180 : 210, borderRadius: 20, overflow: "hidden", marginBottom: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-    featuredImage: { width: "100%", height: "100%", backgroundColor: colors.border },
-    featuredOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 16, paddingTop: 42, backgroundColor: "rgba(0,0,0,0.58)" },
-    featuredEyebrow: { color: "#E8C878", fontSize: 10, fontWeight: "800", letterSpacing: 1.3 },
-    featuredTitle: { color: "#FFFFFF", fontFamily: fonts.display, fontSize: layout.isSmallPhone ? 18 : 21, fontWeight: "700", marginTop: 4 },
-    featuredArtist: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 3 },
     sectionTitle: { color: colors.text, fontSize: 16, fontWeight: "800", marginBottom: 9 },
     storiesSection: { marginBottom: 16 },
     storiesRail: { gap: 14, paddingVertical: 3, paddingHorizontal: 2 },

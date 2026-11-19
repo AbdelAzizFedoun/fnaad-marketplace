@@ -148,11 +148,22 @@ export const resolveMediaUrl = (path?: string | null) => {
   const origin = API_BASE_URL.replace(/\/api\/?$/, "");
   try {
     const url = new URL(path, origin);
-    // Cloudinary URLs are already public delivery URLs. Preserve their host
-    // instead of rewriting them to the Railway API origin.
-    if (url.hostname.endsWith("cloudinary.com")) {
+    if (url.hostname === "cloudinary.com" || url.hostname.endsWith(".cloudinary.com")) {
+      url.pathname = url.pathname.replace(/\/fnaad\/(?:fnaad\/)+/g, "/fnaad/");
       return url.toString();
     }
+    const apiHost = new URL(origin).hostname;
+    const isBackendHost =
+      url.hostname === apiHost ||
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname.endsWith(".railway.app") ||
+      url.hostname.endsWith(".railway.internal") ||
+      url.hostname.endsWith(".local") ||
+      /^10\./.test(url.hostname) ||
+      /^192\.168\./.test(url.hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(url.hostname);
+    if (!isBackendHost) return url.toString();
     return `${origin}${url.pathname}${url.search}`;
   } catch {
     return `${origin}/${path.replace(/^\/+/, "")}`;
