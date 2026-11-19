@@ -306,9 +306,10 @@ export const resolveMediaUrl = (path?: string | null) => {
     const base = API_ORIGIN || "http://10.0.251.236:8000";
     const url = new URL(path, base);
 
-    // Cloudinary URLs are already public delivery URLs. Do not rewrite them
-    // back to the Railway API origin.
-    if (url.hostname.endsWith("cloudinary.com")) {
+    // Keep Cloudinary delivery URLs, but collapse the duplicate storage prefix
+    // currently returned by the production API.
+    if (url.hostname === "cloudinary.com" || url.hostname.endsWith(".cloudinary.com")) {
+      url.pathname = url.pathname.replace(/\/fnaad\/(?:fnaad\/)+/g, "/fnaad/");
       return url.toString();
     }
 
