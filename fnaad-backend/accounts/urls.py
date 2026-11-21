@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, MeView, RegisterPushTokenView, ChangePasswordView, UpdateProfileView
+from .views import RegisterView, MeView, RegisterPushTokenView, ChangePasswordView, UpdateProfileView, DeleteAccountView
 from .views import RegisterView, MeView, RegisterPushTokenView, ChangePasswordView, UpdateProfileView, RequestPasswordResetView, ConfirmPasswordResetView, NotificationListView, MarkNotificationReadView, MarkNotificationsReadView, DeleteNotificationView, ClearNotificationsView, FollowerProfileView
 
 urlpatterns = [
@@ -9,6 +9,7 @@ urlpatterns = [
     path("push-token/", RegisterPushTokenView.as_view(), name="register-push-token"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("update-profile/", UpdateProfileView.as_view(), name="update-profile"),
+    path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),
     path("request-password-reset/", RequestPasswordResetView.as_view(), name="request-password-reset"),
     path("confirm-password-reset/", ConfirmPasswordResetView.as_view(), name="confirm-password-reset"),
     path("notifications/", NotificationListView.as_view(), name="notifications"),

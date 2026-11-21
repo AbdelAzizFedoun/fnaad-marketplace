@@ -78,6 +78,15 @@ class UpdateProfileView(generics.UpdateAPIView):
         return self.request.user    
 
 
+class DeleteAccountView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        # Related account data uses Django's cascade rules where appropriate.
+        request.user.delete()
+        return Response({"detail": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]

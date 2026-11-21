@@ -195,6 +195,8 @@ export const logoutUser = async () => {
   await storage.deleteItem(REFRESH_KEY);
 };
 
+export const deleteAccount = () => api.delete("/accounts/delete-account/");
+
 export const getStoredToken = () => storage.getItem(ACCESS_KEY);
 
 export const isLoggedIn = async (): Promise<boolean> => {
