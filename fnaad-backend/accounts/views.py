@@ -6,9 +6,11 @@ from .serializers import ChangePasswordSerializer, UpdateProfileSerializer
 from .models import User, ArtistProfile, PasswordResetCode
 from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer, ChangePasswordSerializer, UpdateProfileSerializer, RequestPasswordResetSerializer, ConfirmPasswordResetSerializer, NotificationSerializer, PublicUserProfileSerializer
 import logging
+import uuid
 
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from django.db.models.deletion import ProtectedError
 from rest_framework.views import APIView
 
 logger = logging.getLogger(__name__)
@@ -83,7 +85,32 @@ class DeleteAccountView(APIView):
 
     def delete(self, request, *args, **kwargs):
         # Related account data uses Django's cascade rules where appropriate.
-        request.user.delete()
+        user = request.user
+        try:
+            user.delete()
+        except ProtectedError:
+            # Preserve order history, but remove the person's identifying data
+            # and prevent any future login or public profile access.
+            tombstone = uuid.uuid4().hex[:16]
+            user.username = f"deleted_{tombstone}"
+            user.email = f"deleted_{tombstone}@deleted.invalid"
+            user.phone_number = f"deleted_{tombstone}"
+            user.first_name = ""
+            user.last_name = ""
+            user.profile_photo = None
+            user.expo_push_token = None
+            user.is_active = False
+            user.save(update_fields=[
+                "username", "email", "phone_number", "first_name", "last_name",
+                "profile_photo", "expo_push_token", "is_active",
+            ])
+            artist_profile = getattr(user, "artist_profile", None)
+            if artist_profile:
+                artist_profile.brand_name = "Deleted artist"
+                artist_profile.bio = ""
+                artist_profile.avatar = None
+                artist_profile.is_suspended = True
+                artist_profile.save(update_fields=["brand_name", "bio", "avatar", "is_suspended"])
         return Response({"detail": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 
