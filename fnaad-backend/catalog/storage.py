@@ -1,9 +1,9 @@
 from django.core.files.storage import storages
 
 try:
-    from cloudinary_storage.storage import VideoMediaCloudinaryStorage
+    from cloudinary_storage.storage import RawMediaCloudinaryStorage
 except ImportError:
-    VideoMediaCloudinaryStorage = None
+    RawMediaCloudinaryStorage = None
 
 
 def product_media_storage():
@@ -12,6 +12,6 @@ def product_media_storage():
 
 def audio_media_storage():
     """Use Cloudinary's video resource type for audio files when available."""
-    if VideoMediaCloudinaryStorage is not None:
-        return VideoMediaCloudinaryStorage()
+    if RawMediaCloudinaryStorage is not None:
+        return RawMediaCloudinaryStorage()
     return storages["default"]

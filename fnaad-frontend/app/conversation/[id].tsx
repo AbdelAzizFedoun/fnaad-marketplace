@@ -1758,7 +1758,6 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         <Pressable
           style={[
             styles.recordBtn,
-            Platform.OS === "web" && styles.webRecordBtn,
             recorderState.isRecording && styles.recordBtnActive,
           ]}
           hitSlop={8}
@@ -2320,7 +2319,6 @@ function createStyles(
     voicePreviewSend: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
     attachBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
     recordBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.accent },
-    webRecordBtn: { width: 118, flexDirection: "row", gap: 7, paddingHorizontal: 10 },
     recordBtnActive: { backgroundColor: DANGER, borderColor: DANGER },
     recordBtnText: { color: colors.accent, fontSize: 12, fontWeight: "700" },
     recordBtnTextActive: { color: "#FFFFFF" },
