@@ -1112,7 +1112,7 @@ export default function GalleryScreen() {
                 <Pressable style={styles.card} onPress={() => router.push(`/product/${item.id}`)}>
                   <View style={styles.cardImageWrap}>
                     {imageUrl ? (
-                      <Image source={{ uri: imageUrl }} style={styles.cardImage} resizeMode="cover" />
+                      <Image source={{ uri: imageUrl }} style={styles.cardImage} resizeMode="contain" />
                     ) : (
                       <View style={styles.cardImageFallback}>
                         <Ionicons name="image-outline" size={32} color={colors.textMuted} />
