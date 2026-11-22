@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db import models  # type: ignore
 from django.core.validators import MinValueValidator  # type: ignore
 from accounts.models import ArtistProfile  # type: ignore
-from .storage import product_media_storage
+from .storage import audio_media_storage, product_media_storage
 
 
 def generate_product_slug():
@@ -293,7 +293,7 @@ class Message(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     image = models.ImageField(upload_to="messages/images/", null=True, blank=True)
     document = models.FileField(upload_to="messages/documents/", null=True, blank=True)
-    audio = models.FileField(upload_to="messages/audio/", null=True, blank=True)
+    audio = models.FileField(storage=audio_media_storage, upload_to="messages/audio/", null=True, blank=True)
     # A reply always remains inside the same conversation.  The view validates
     # that boundary before saving; SET_NULL keeps a reply usable if its source
     # message is later removed.

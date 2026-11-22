@@ -1774,11 +1774,6 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
           {sendingVoice ? <ActivityIndicator size="small" color={colors.accentText} /> : (
             <>
               <Ionicons name={recorderState.isRecording ? "radio" : "mic"} size={20} color={recorderState.isRecording ? "#FFFFFF" : colors.accent} />
-              {Platform.OS === "web" && (
-                <Text style={[styles.recordBtnText, recorderState.isRecording && styles.recordBtnTextActive]}>
-                  {recorderState.isRecording ? (voiceCancelRef.current ? "Release to cancel" : "Release to send") : "Hold to record"}
-                </Text>
-              )}
             </>
           )}
         </Pressable>
