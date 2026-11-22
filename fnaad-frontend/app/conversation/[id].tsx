@@ -807,6 +807,8 @@ export default function ConversationScreen() {
   const [sendingVoice, setSendingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [voiceElapsed, setVoiceElapsed] = useState(0);
+  const [voicePreviewUri, setVoicePreviewUri] = useState<string | null>(null);
+  const [voicePreviewDuration, setVoicePreviewDuration] = useState(0);
   const [voiceCanceling, setVoiceCanceling] = useState(false);
   const voiceHoldRef = useRef(false);
   const voiceCancelRef = useRef(false);
@@ -933,6 +935,8 @@ export default function ConversationScreen() {
       return;
     }
     setVoiceError("");
+    setVoicePreviewUri(null);
+    setVoicePreviewDuration(0);
     try {
       voiceHoldRef.current = true;
       voiceCancelRef.current = false;
@@ -965,8 +969,8 @@ export default function ConversationScreen() {
     try {
       await recorder.stop();
       if (!cancelled && recorder.uri) {
-        await sendAudioMessage(Number(id), recorder.uri);
-        loadConversation();
+        setVoicePreviewUri(recorder.uri);
+        setVoicePreviewDuration(voiceElapsed);
       }
     } catch (error: any) {
       const detail = error.response?.data?.detail || error.response?.data?.audio?.[0] || error.message;
@@ -976,6 +980,28 @@ export default function ConversationScreen() {
     } finally {
       setSendingVoice(false);
     }
+  };
+
+  const sendVoicePreview = async () => {
+    if (!voicePreviewUri || sendingVoice) return;
+    setSendingVoice(true);
+    try {
+      await sendAudioMessage(Number(id), voicePreviewUri);
+      setVoicePreviewUri(null);
+      setVoicePreviewDuration(0);
+      loadConversation();
+    } catch (error: any) {
+      const detail = error.response?.data?.detail || error.response?.data?.audio?.[0] || error.message;
+      setVoiceError(detail || "Unable to send this voice note. Please try again.");
+    } finally {
+      setSendingVoice(false);
+    }
+  };
+
+  const deleteVoicePreview = () => {
+    setVoicePreviewUri(null);
+    setVoicePreviewDuration(0);
+    setVoiceError("");
   };
 
   const moveVoiceRecording = (event: any) => {
@@ -1739,9 +1765,9 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
           onLongPress={(event) => { void startVoiceRecording(event); }}
           onPressOut={() => { void finishVoiceRecording(); }}
           onPressMove={moveVoiceRecording}
-          disabled={sendingVoice}
+          disabled={sendingVoice || !!voicePreviewUri}
           delayLongPress={350}
-          accessibilityLabel="Hold to record a voice note. Release to send."
+          accessibilityLabel="Hold to record a voice note. Release to preview."
           accessibilityRole="button"
           accessibilityState={{ disabled: sendingVoice, selected: recorderState.isRecording }}
         >
@@ -1756,6 +1782,20 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
             </>
           )}
         </Pressable>
+        {voicePreviewUri ? (
+          <View style={styles.voicePreviewBar}>
+            <Pressable onPress={deleteVoicePreview} hitSlop={8} accessibilityLabel="Delete voice note">
+              <Ionicons name="trash-outline" size={22} color={DANGER} />
+            </Pressable>
+            <View style={styles.voicePreviewCopy}>
+              <Text style={[styles.voicePreviewTitle, { color: colors.text }]}>Voice note ready</Text>
+              <Text style={[styles.voicePreviewDuration, { color: colors.textMuted }]}>{`${Math.floor(voicePreviewDuration / 60)}:${String(voicePreviewDuration % 60).padStart(2, "0")}`}</Text>
+            </View>
+            <Pressable style={[styles.voicePreviewSend, { backgroundColor: colors.accent }]} onPress={() => void sendVoicePreview()} disabled={sendingVoice} accessibilityLabel="Send voice note">
+              {sendingVoice ? <ActivityIndicator size="small" color={colors.accentText} /> : <Ionicons name="send" size={18} color={colors.accentText} />}
+            </Pressable>
+          </View>
+        ) : null}
         <TextInput
           style={styles.input}
           placeholder={t("writeMessage")}
@@ -1765,7 +1805,7 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
           onFocus={() => setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 180)}
           multiline
         />
-        <Pressable style={styles.sendBtn} onPress={handleSend} disabled={sending || !text.trim()}>
+        <Pressable style={styles.sendBtn} onPress={handleSend} disabled={sending || !text.trim() || !!voicePreviewUri}>
           {sending ? <ActivityIndicator size="small" color={colors.accentText} /> : <Ionicons name="send" size={18} color={text.trim() ? colors.accentText : colors.textMuted} />}
         </Pressable>
       </View>
@@ -2278,6 +2318,11 @@ function createStyles(
     voiceRecordingTitle: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
     voiceRecordingHint: { color: "rgba(255,255,255,0.82)", fontSize: 11, marginTop: 2 },
     voiceRecordingTime: { color: "#FFFFFF", fontSize: 13, fontWeight: "800", fontVariant: ["tabular-nums"] },
+    voicePreviewBar: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 8 },
+    voicePreviewCopy: { flex: 1 },
+    voicePreviewTitle: { fontSize: 12, fontWeight: "800" },
+    voicePreviewDuration: { fontSize: 11, marginTop: 2, fontVariant: ["tabular-nums"] },
+    voicePreviewSend: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
     attachBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
     recordBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.accent },
     webRecordBtn: { width: 118, flexDirection: "row", gap: 7, paddingHorizontal: 10 },
