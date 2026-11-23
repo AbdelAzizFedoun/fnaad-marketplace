@@ -216,6 +216,13 @@ class Conversation(models.Model):
     reported_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     cancelled_at = models.DateTimeField(null=True, blank=True, help_text="Set when the conversation is cancelled — lets a customer resume it instead of starting a new one.")
+    pinned_message = models.ForeignKey(
+        "Message",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pinned_in_conversations",
+    )
 
     class Meta:
         unique_together = [
@@ -307,6 +314,11 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     is_forwarded = models.BooleanField(default=False)
+    deleted_by = models.ManyToManyField(
+        "accounts.User",
+        blank=True,
+        related_name="deleted_messages",
+    )
 
     class Meta:
         ordering = ["created_at"]

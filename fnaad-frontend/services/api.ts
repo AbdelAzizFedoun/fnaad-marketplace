@@ -439,11 +439,23 @@ export const getUnreadMessageCount = () => api.get("/catalog/conversations/unrea
 export const getConversationDetail = (id: number) =>
   api.get(`/catalog/conversations/${id}/`);
 
-export const deleteConversationMessages = (conversationId: number, messageIds?: number[]) =>
+export const deleteConversationMessages = (conversationId: number, messageIds?: number[], deleteType: "everyone" | "me" = "everyone") =>
   api.delete(`/catalog/conversations/${conversationId}/messages/`, {
-    data: messageIds ? { message_ids: messageIds } : {},
-    params: messageIds?.length ? { message_ids: messageIds.join(",") } : undefined,
+    data: {
+      ...(messageIds ? { message_ids: messageIds } : {}),
+      delete_type: deleteType,
+    },
+    params: {
+      ...(messageIds?.length ? { message_ids: messageIds.join(",") } : {}),
+      delete_type: deleteType,
+    },
   });
+
+export const pinConversationMessage = (conversationId: number, messageId?: number | null) =>
+  api.post(`/catalog/conversations/${conversationId}/pin/`, { message_id: messageId });
+
+export const unpinConversationMessage = (conversationId: number) =>
+  api.delete(`/catalog/conversations/${conversationId}/pin/`);
 
 export const sendMessage = (conversationId: number, text: string, replyToId?: number) =>
   api.post("/catalog/messages/send/", {

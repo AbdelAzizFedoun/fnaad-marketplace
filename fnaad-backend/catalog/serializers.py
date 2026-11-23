@@ -250,7 +250,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     artist_name = serializers.SerializerMethodField()
     artist_avatar = serializers.SerializerMethodField()
     artist_is_verified = serializers.SerializerMethodField()
-    messages = MessageSerializer(many=True, read_only=True)
+    messages = serializers.SerializerMethodField()
+    pinned_message = serializers.SerializerMethodField()
     unread = serializers.SerializerMethodField()
     other_user_online = serializers.SerializerMethodField()
     other_user_typing = serializers.SerializerMethodField()
@@ -265,10 +266,25 @@ class ConversationSerializer(serializers.ModelSerializer):
             "id", "product", "product_title", "commission_response", "customer", "customer_username",
             "artist_id", "artist_name", "artist_avatar", "artist_is_verified",
             "status", "unread", "other_user_online", "other_user_typing", "is_reported", "report_reason",
-            "reported_at", "created_at", "messages", "contact",
+            "reported_at", "created_at", "messages", "pinned_message", "contact",
             "product_id", "product_price_xaf", "product_image",
         ]
         read_only_fields = ["id", "customer", "customer_username", "product", "commission_response", "status", "created_at"]
+
+    def get_messages(self, obj):
+        request = self.context.get("request")
+        qs = obj.messages.all()
+        if request and request.user.is_authenticated:
+            qs = qs.exclude(deleted_by=request.user)
+        return MessageSerializer(qs, many=True, context=self.context).data
+
+    def get_pinned_message(self, obj):
+        if not obj.pinned_message:
+            return None
+        request = self.context.get("request")
+        if request and request.user.is_authenticated and obj.pinned_message.deleted_by.filter(id=request.user.id).exists():
+            return None
+        return MessageSerializer(obj.pinned_message, context=self.context).data
 
     def get_product_title(self, obj):
         if obj.product:

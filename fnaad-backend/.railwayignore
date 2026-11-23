@@ -1,0 +1,35 @@
+# Ignore large directories that Railway doesn't need
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local DB files
+db.sqlite3
+db.sqlite3*
+*.backup*
+
+# Local media (served from Cloudinary in production)
+media/
+
+# Static files (collected during build)
+staticfiles/
+
+# Logs
+*.log
+logs/
+
+# Dev/test scripts
+test_copy.py
+test_copy2.py
+run_push_tests.ps1
+setup_push_test_data.py
+missing_views.py
+
+# Git backup
+.git_backup/
+
+# Env files
+.env
+.env.*
+!.env.example

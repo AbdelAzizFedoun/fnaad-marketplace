@@ -6,7 +6,7 @@ import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
-import { getConversationDetail, getMyConversations, sendMessage, sendLocationMessage, sendImageMessage, sendDocumentMessage, sendAudioMessage, toggleMessageReaction, updateConversationStatus, markConversationRead, reportConversation, getReviewableConversations, createReview, resolveMediaUrl, deleteConversationMessages, resumeConversation, editMessage, forwardMessage, setConversationTyping, blockConversation } from "../../services/api";
+import { getConversationDetail, getMyConversations, sendMessage, sendLocationMessage, sendImageMessage, sendDocumentMessage, sendAudioMessage, toggleMessageReaction, updateConversationStatus, markConversationRead, reportConversation, getReviewableConversations, createReview, resolveMediaUrl, deleteConversationMessages, resumeConversation, editMessage, forwardMessage, setConversationTyping, blockConversation, pinConversationMessage, unpinConversationMessage } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -112,6 +112,7 @@ type ConversationData = {
   product_image: string | null;
   is_reported: boolean;
   messages: Message[];
+  pinned_message?: Message | null;
   contact?: ConversationContact | null;
 };
 
@@ -253,12 +254,28 @@ function ContactCard({
 const DANGER = "#B0524F";
 const SUCCESS = "#5FA779";
 const INFO_LINK = "#1B4DA6";
-const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const EXTENDED_REACTIONS = [
+  "👍", "❤️", "😂", "😮", "😢", "🙏",
+  "🔥", "🎉", "👏", "💯", "✨", "👀",
+  "😍", "🥰", "🤩", "🥳", "😎", "🤝",
+  "🙌", "💪", "🚀", "⭐", "💔", "🤔",
+  "🤐", "😴", "🙄", "😇", "🤫", "🫡",
+];
+
+function getMessagePreview(message: { message_type: string; text?: string }, t: (key: string) => string) {
+  if (message.message_type === "image") return t("attachGallery") || "Photo";
+  if (message.message_type === "document") return t("attachDocument") || "Document";
+  if (message.message_type === "location") return t("attachLocation") || "Location";
+  if (message.message_type === "audio") return "Voice note";
+  return message.text || "Message";
+}
 
 function getReplyPreview(message: MessageReply, t: (key: string) => string) {
   if (message.message_type === "image") return t("attachGallery");
   if (message.message_type === "document") return t("attachDocument");
   if (message.message_type === "location") return t("attachLocation");
+  if (message.message_type === "audio") return "Voice note";
   return message.text || t("writeMessage");
 }
 
@@ -537,10 +554,12 @@ function MessageBubble({
   showSender,
   showDateSeparator,
   isLastInGroup,
+  isPinned,
+  isHighlighted,
   colors,
   styles,
-    onOpenMap,
-    onOpenImage,
+  onOpenMap,
+  onOpenImage,
   onMessageLongPress,
   onToggleReaction,
   selectionMode,
@@ -554,10 +573,12 @@ function MessageBubble({
   showSender: boolean;
   showDateSeparator: boolean;
   isLastInGroup: boolean;
+  isPinned?: boolean;
+  isHighlighted?: boolean;
   colors: any;
   styles: any;
-    onOpenMap: (lat: number, lng: number) => void;
-    onOpenImage: (url: string) => void;
+  onOpenMap: (lat: number, lng: number) => void;
+  onOpenImage: (url: string) => void;
   onMessageLongPress: (message: Message) => void;
   onToggleReaction: (message: Message, emoji: string) => void;
   selectionMode: boolean;
@@ -595,7 +616,12 @@ function MessageBubble({
       {showDateSeparator && <DateSeparator date={item.created_at} colors={colors} styles={styles} />}
       <View style={[styles.messageRow, { justifyContent: isMine ? "flex-end" : "flex-start" }]}>
       {selectionMode && <Ionicons name={selected ? "checkmark-circle" : "ellipse-outline"} size={24} color={selected ? colors.accent : colors.textMuted} />}
-      <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs, !isLastInGroup && (isMine ? styles.bubbleMineContinued : styles.bubbleTheirsContinued)]}>
+      <View style={[
+        styles.bubble,
+        isMine ? styles.bubbleMine : styles.bubbleTheirs,
+        !isLastInGroup && (isMine ? styles.bubbleMineContinued : styles.bubbleTheirsContinued),
+        isHighlighted && { borderWidth: 2, borderColor: colors.accentText },
+      ]}>
         {item.is_forwarded && <Text style={isMine ? styles.forwardedMine : styles.forwardedTheirs}>Forwarded</Text>}
         {showSender ? senderLabel : null}
         {item.reply_to && (
@@ -655,6 +681,14 @@ function MessageBubble({
           </View>
         )}
         <View style={styles.messageMeta}>
+          {isPinned && (
+            <Ionicons
+              name="pin"
+              size={12}
+              color={isMine ? colors.accentText : colors.textMuted}
+              style={{ marginRight: 4, transform: [{ rotate: "45deg" }] }}
+            />
+          )}
           <Text style={isMine ? styles.messageTimeMine : styles.messageTimeTheirs}>{formatMessageTime(item.created_at)}</Text>
           {!!item.edited_at && <Text style={isMine ? styles.messageEditedMine : styles.messageEditedTheirs}> · Edited</Text>}
           {isMine && isLastInGroup && <Ionicons name={item.read ? "checkmark-done" : "checkmark"} size={14} color={colors.accentText} style={{ opacity: 0.75, marginLeft: 4 }} />}
@@ -793,6 +827,11 @@ export default function ConversationScreen() {
   const [deletingMessages, setDeletingMessages] = useState(false);
   const [contactVisible, setContactVisible] = useState(false);
   const [actionMessage, setActionMessage] = useState<Message | null>(null);
+  const [deleteTargetMessage, setDeleteTargetMessage] = useState<Message | null>(null);
+  const [infoMessage, setInfoMessage] = useState<Message | null>(null);
+  const [extendedEmojiPickerVisible, setExtendedEmojiPickerVisible] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+  const [pinningMessage, setPinningMessage] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reactionBusy, setReactionBusy] = useState(false);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -1155,6 +1194,8 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
     const showSender = !isMine && (!prev || prev.sender_username !== item.sender_username || !isWithinFiveMinutes(prev.created_at, item.created_at));
     const showDateSeparator = !prev || !isSameDay(prev.created_at, item.created_at);
     const isLastInGroup = index === conversation.messages.length - 1 || conversation.messages[index + 1]?.sender_username !== item.sender_username || !isWithinFiveMinutes(item.created_at, conversation.messages[index + 1].created_at);
+    const isPinned = conversation.pinned_message?.id === item.id;
+    const isHighlighted = highlightedMessageId === item.id;
 
     return (
       <MessageBubble
@@ -1163,13 +1204,15 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         showSender={showSender}
         showDateSeparator={showDateSeparator}
         isLastInGroup={isLastInGroup}
+        isPinned={isPinned}
+        isHighlighted={isHighlighted}
         colors={colors}
         styles={styles}
         onOpenMap={openMap}
         onOpenImage={setExpandedImageUrl}
         onMessageLongPress={setActionMessage}
         onToggleReaction={(message, emoji) => { void handleToggleReaction(message, emoji); }}
-        selectionMode={selectionMode && isMine}
+        selectionMode={selectionMode}
         selected={selectedMessageIds.has(item.id)}
         onToggleSelected={() => {
           setSelectedMessageIds((current) => {
@@ -1318,25 +1361,49 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
   };
 
   const confirmSelectedMessages = () => {
-    if (!selectedMessageIds.size) return;
-    Alert.alert(
-      "Unsend selected messages",
-      `Permanently unsend ${selectedMessageIds.size} of your message${selectedMessageIds.size === 1 ? "" : "s"}?`,
-      [
-        { text: t("cancel") || "Cancel", style: "cancel" },
-        {
-          text: "Unsend",
-          style: "destructive",
-          onPress: () => { void deleteMessages([...selectedMessageIds]); },
-        },
-      ]
+    if (!selectedMessageIds.size || !conversation) return;
+    const ids = [...selectedMessageIds];
+    const allMine = ids.every(
+      (mId) => conversation.messages.find((m) => m.id === mId)?.sender_username === user?.username
     );
+
+    if (allMine) {
+      Alert.alert(
+        "Delete messages",
+        `Delete ${ids.length} selected message${ids.length === 1 ? "" : "s"}?`,
+        [
+          { text: t("cancel") || "Cancel", style: "cancel" },
+          {
+            text: "Delete for me",
+            onPress: () => { void deleteMessages(ids, "me"); },
+          },
+          {
+            text: "Delete for everyone",
+            style: "destructive",
+            onPress: () => { void deleteMessages(ids, "everyone"); },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Delete for me",
+        `Delete ${ids.length} selected message${ids.length === 1 ? "" : "s"} for yourself? Other participants will still see them.`,
+        [
+          { text: t("cancel") || "Cancel", style: "cancel" },
+          {
+            text: "Delete for me",
+            style: "destructive",
+            onPress: () => { void deleteMessages(ids, "me"); },
+          },
+        ]
+      );
+    }
   };
 
-  const deleteMessages = async (messageIds?: number[]) => {
+  const deleteMessages = async (messageIds?: number[], deleteType: "everyone" | "me" = "everyone") => {
     setDeletingMessages(true);
     try {
-      await deleteConversationMessages(Number(id), messageIds);
+      await deleteConversationMessages(Number(id), messageIds, deleteType);
       // Update locally for instant feedback, then refetch so the screen always
       // ends up matching what the server actually deleted.
       setConversation((current) => current ? {
@@ -1344,8 +1411,12 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         messages: messageIds
           ? current.messages.filter((message) => !messageIds.includes(message.id))
           : [],
+        pinned_message: (messageIds && current.pinned_message && messageIds.includes(current.pinned_message.id))
+          ? null
+          : current.pinned_message,
       } : current);
       cancelMessageSelection();
+      setDeleteTargetMessage(null);
       await loadConversation();
     } catch (err: any) {
       console.log("Message deletion error:", err.response?.data || err.message);
@@ -1353,6 +1424,57 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
       loadConversation();
     } finally {
       setDeletingMessages(false);
+    }
+  };
+
+  const handleTogglePinMessage = async (message: Message) => {
+    setActionMessage(null);
+    if (pinningMessage) return;
+    setPinningMessage(true);
+    const isCurrentlyPinned = conversation?.pinned_message?.id === message.id;
+    try {
+      if (isCurrentlyPinned) {
+        await unpinConversationMessage(Number(id));
+        setConversation((current) => current ? { ...current, pinned_message: null } : current);
+      } else {
+        const res = await pinConversationMessage(Number(id), message.id);
+        const pinned = res.data?.pinned_message || message;
+        setConversation((current) => current ? { ...current, pinned_message: pinned } : current);
+      }
+    } catch (err: any) {
+      console.log("Pin message error:", err.response?.data || err.message);
+      Alert.alert("Unable to update pinned message", "Please try again.");
+    } finally {
+      setPinningMessage(false);
+    }
+  };
+
+  const scrollToMessage = (messageId: number) => {
+    if (!conversation) return;
+    const index = filteredMessages.findIndex((m) => m.id === messageId);
+    if (index !== -1) {
+      try {
+        flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      } catch {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 1800);
+    }
+  };
+
+  const handleCopyMessage = async (message: Message) => {
+    let content = message.text || "";
+    if (message.message_type === "location" && message.latitude && message.longitude) {
+      content = `https://www.google.com/maps/search/?api=1&query=${message.latitude},${message.longitude}`;
+    } else if (message.message_type === "image" && message.image) {
+      content = resolveMediaUrl(message.image) || "";
+    } else if (message.message_type === "document" && message.document) {
+      content = resolveMediaUrl(message.document) || "";
+    }
+    setActionMessage(null);
+    if (content) {
+      await Clipboard.setStringAsync(content);
     }
   };
 
@@ -1603,16 +1725,68 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
 
       {selectionMode && (
         <View style={[styles.selectionBar, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <Text style={[styles.selectionCount, { color: colors.text }]}>{selectedMessageIds.size} selected · your messages only</Text>
-          <View style={styles.selectionActions}>
-            <Pressable onPress={cancelMessageSelection} hitSlop={8}>
-              <Text style={[styles.selectionActionText, { color: colors.textMuted }]}>Cancel</Text>
+          <View style={styles.selectionCountRow}>
+            <Pressable onPress={cancelMessageSelection} hitSlop={8} style={{ marginRight: 10 }}>
+              <Ionicons name="close" size={22} color={colors.text} />
             </Pressable>
-            <Pressable onPress={confirmSelectedMessages} disabled={!selectedMessageIds.size || deletingMessages} hitSlop={8}>
-              <Text style={[styles.selectionActionText, { color: selectedMessageIds.size && !deletingMessages ? DANGER : colors.textMuted }]}>{deletingMessages ? "Deleting…" : "Delete"}</Text>
+            <Text style={[styles.selectionCount, { color: colors.text }]}>
+              {selectedMessageIds.size} selected
+            </Text>
+          </View>
+          <View style={styles.selectionActions}>
+            <Pressable
+              onPress={confirmSelectedMessages}
+              disabled={!selectedMessageIds.size || deletingMessages}
+              hitSlop={8}
+              style={[
+                styles.selectionActionBtn,
+                { backgroundColor: selectedMessageIds.size ? "#FDE8E8" : "transparent" },
+              ]}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={18}
+                color={selectedMessageIds.size && !deletingMessages ? "#E53935" : colors.textMuted}
+              />
+              <Text style={[styles.selectionActionText, { color: selectedMessageIds.size && !deletingMessages ? "#E53935" : colors.textMuted }]}>
+                {deletingMessages ? "Deleting…" : "Delete"}
+              </Text>
             </Pressable>
           </View>
         </View>
+      )}
+
+      {conversation.pinned_message && (
+        <Pressable
+          style={[styles.pinnedBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => scrollToMessage(conversation.pinned_message!.id)}
+          accessibilityRole="button"
+          accessibilityLabel="Jump to pinned message"
+        >
+          <View style={[styles.pinnedIndicator, { backgroundColor: colors.accentText }]} />
+          <View style={styles.pinnedContent}>
+            <View style={styles.pinnedHeaderRow}>
+              <Ionicons name="pin" size={13} color={colors.accentText} style={{ transform: [{ rotate: "45deg" }] }} />
+              <Text style={[styles.pinnedLabel, { color: colors.accentText }]}>Pinned message</Text>
+            </View>
+            <Text style={[styles.pinnedPreviewText, { color: colors.text }]} numberOfLines={1}>
+              <Text style={{ fontWeight: "700" }}>{conversation.pinned_message.sender_username}: </Text>
+              {getMessagePreview(conversation.pinned_message, t)}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.pinnedUnpinBtn}
+            hitSlop={10}
+            onPress={(e) => {
+              e.stopPropagation();
+              void handleTogglePinMessage(conversation.pinned_message!);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Unpin message"
+          >
+            <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+        </Pressable>
       )}
 
       <FlatList
@@ -1812,14 +1986,11 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         onRequestClose={() => setActionMessage(null)}
       >
         <Pressable style={styles.menuOverlay} onPress={() => setActionMessage(null)}>
-          <Pressable style={[styles.messageActionSheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
-            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+          <View style={styles.actionSheetContainer}>
             {actionMessage && (
               <>
-                <Text style={[styles.messageActionTitle, { color: colors.text }]} numberOfLines={1}>
-                  {actionMessage.sender_username}
-                </Text>
-                <View style={styles.quickReactionRow}>
+                {/* 1. Floating Quick Reactions Bar (WhatsApp-style) */}
+                <View style={[styles.floatingReactionPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   {QUICK_REACTIONS.map((emoji) => {
                     const selected = actionMessage.reactions?.some(
                       (reaction) => reaction.emoji === emoji && reaction.reacted_by_me
@@ -1828,61 +1999,319 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
                       <Pressable
                         key={emoji}
                         style={[
-                          styles.quickReactionButton,
-                          { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.background : "transparent" },
+                          styles.reactionBubble,
+                          selected && { backgroundColor: colors.background, transform: [{ scale: 1.15 }] },
                         ]}
-                        onPress={() => { void handleToggleReaction(actionMessage, emoji); }}
+                        onPress={() => {
+                          void handleToggleReaction(actionMessage, emoji);
+                          setActionMessage(null);
+                        }}
                         disabled={reactionBusy}
                         accessibilityRole="button"
                         accessibilityLabel={`React ${emoji}`}
                       >
-                        <Text style={styles.quickReactionEmoji}>{emoji}</Text>
+                        <Text style={styles.reactionBubbleEmoji}>{emoji}</Text>
                       </Pressable>
                     );
                   })}
-                </View>
-                <Pressable
-                  style={[styles.messageActionRow, { borderTopColor: colors.border }]}
-                  onPress={() => handleReplyToMessage(actionMessage)}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="return-down-forward-outline" size={21} color={colors.accent} />
-                  <Text style={[styles.messageActionText, { color: colors.text }]}>{t("reply")}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.messageActionRow, { borderTopColor: colors.border }]}
-                  onPress={() => { void startForwardingMessage(actionMessage); }}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="arrow-redo-outline" size={21} color={colors.accent} />
-                  <Text style={[styles.messageActionText, { color: colors.text }]}>Forward</Text>
-                </Pressable>
-                {actionMessage.message_type === "text" && (
                   <Pressable
-                    style={[styles.messageActionRow, { borderTopColor: colors.border }]}
+                    style={[styles.reactionBubble, styles.reactionPlusBtn, { backgroundColor: colors.background }]}
+                    onPress={() => setExtendedEmojiPickerVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="More reactions"
+                  >
+                    <Ionicons name="add" size={20} color={colors.text} />
+                  </Pressable>
+                </View>
+
+                {/* 2. Message snippet preview */}
+                <View style={[styles.actionMessagePreviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={styles.actionPreviewHeader}>
+                    <Text style={[styles.actionPreviewSender, { color: colors.accentText }]}>{actionMessage.sender_username}</Text>
+                    <Text style={[styles.actionPreviewTime, { color: colors.textMuted }]}>{formatMessageTime(actionMessage.created_at)}</Text>
+                  </View>
+                  <Text style={[styles.actionPreviewText, { color: colors.text }]} numberOfLines={2}>
+                    {getMessagePreview(actionMessage, t)}
+                  </Text>
+                </View>
+
+                {/* 3. Action Menu card (WhatsApp-style grouped menu) */}
+                <View style={[styles.whatsappMenuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {/* Pin / Unpin */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                    onPress={() => void handleTogglePinMessage(actionMessage)}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons
+                      name={conversation?.pinned_message?.id === actionMessage.id ? "pin" : "pin-outline"}
+                      size={20}
+                      color={colors.accentText}
+                      style={{ transform: [{ rotate: "45deg" }] }}
+                    />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>
+                      {conversation?.pinned_message?.id === actionMessage.id ? "Unpin message" : "Pin message"}
+                    </Text>
+                  </Pressable>
+
+                  {/* Reply */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleReplyToMessage(actionMessage)}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="return-down-forward-outline" size={20} color={colors.text} />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>{t("reply") || "Reply"}</Text>
+                  </Pressable>
+
+                  {/* Forward */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                    onPress={() => { void startForwardingMessage(actionMessage); }}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="arrow-redo-outline" size={20} color={colors.text} />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>Forward</Text>
+                  </Pressable>
+
+                  {/* Copy */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                    onPress={() => { void handleCopyMessage(actionMessage); }}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="copy-outline" size={20} color={colors.text} />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>Copy</Text>
+                  </Pressable>
+
+                  {/* Edit message (only for sender's own text message) */}
+                  {actionMessage.sender_username === user?.username && actionMessage.message_type === "text" && (
+                    <Pressable
+                      style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                      onPress={() => startEditingMessage(actionMessage)}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="create-outline" size={20} color={colors.text} />
+                      <Text style={[styles.whatsappMenuText, { color: colors.text }]}>Edit message</Text>
+                    </Pressable>
+                  )}
+
+                  {/* Message Info */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
                     onPress={() => {
-                      void Clipboard.setStringAsync(actionMessage.text || "").finally(() =>
-                        setActionMessage(null)
-                      );
+                      const msg = actionMessage;
+                      setActionMessage(null);
+                      setInfoMessage(msg);
                     }}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="copy-outline" size={21} color={colors.accent} />
-                    <Text style={[styles.messageActionText, { color: colors.text }]}>Copy</Text>
+                    <Ionicons name="information-circle-outline" size={20} color={colors.text} />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>Message info</Text>
                   </Pressable>
-                )}
-                {actionMessage.sender_username === user?.username && actionMessage.message_type === "text" && (
+
+                  {/* Select */}
                   <Pressable
-                    style={[styles.messageActionRow, { borderTopColor: colors.border }]}
-                    onPress={() => startEditingMessage(actionMessage)}
+                    style={[styles.whatsappMenuItem, { borderBottomColor: colors.border }]}
+                    onPress={() => {
+                      setSelectedMessageIds(new Set([actionMessage.id]));
+                      setSelectionMode(true);
+                      setActionMessage(null);
+                    }}
                     accessibilityRole="button"
                   >
-                    <Ionicons name="create-outline" size={21} color={colors.accent} />
-                    <Text style={[styles.messageActionText, { color: colors.text }]}>Edit message</Text>
+                    <Ionicons name="checkbox-outline" size={20} color={colors.text} />
+                    <Text style={[styles.whatsappMenuText, { color: colors.text }]}>Select</Text>
                   </Pressable>
-                )}
+
+                  {/* Delete (WhatsApp Red / Danger) */}
+                  <Pressable
+                    style={[styles.whatsappMenuItem, styles.whatsappMenuItemLast]}
+                    onPress={() => {
+                      const msg = actionMessage;
+                      setActionMessage(null);
+                      setDeleteTargetMessage(msg);
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#E53935" />
+                    <Text style={[styles.whatsappMenuText, { color: "#E53935", fontWeight: "700" }]}>Delete</Text>
+                  </Pressable>
+                </View>
               </>
             )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* WhatsApp Delete Confirmation Dialog */}
+      <Modal
+        visible={!!deleteTargetMessage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteTargetMessage(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDeleteTargetMessage(null)}>
+          <Pressable style={[styles.deleteDialogCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+            <View style={styles.deleteDialogHeader}>
+              <View style={[styles.deleteIconCircle, { backgroundColor: "#FDE8E8" }]}>
+                <Ionicons name="trash-outline" size={24} color="#E53935" />
+              </View>
+              <Text style={[styles.deleteDialogTitle, { color: colors.text }]}>Delete message?</Text>
+              <Text style={[styles.deleteDialogSubtitle, { color: colors.textMuted }]}>
+                {deleteTargetMessage?.sender_username === user?.username
+                  ? "You can delete this message for everyone in the chat, or delete it only for yourself."
+                  : "This message will be deleted for you. Other participants will still be able to see it."}
+              </Text>
+            </View>
+
+            <View style={styles.deleteDialogActions}>
+              {deleteTargetMessage?.sender_username === user?.username && (
+                <Pressable
+                  style={[styles.deleteDialogBtn, styles.deleteForEveryoneBtn]}
+                  onPress={() => {
+                    const msg = deleteTargetMessage;
+                    setDeleteTargetMessage(null);
+                    if (msg) {
+                      void deleteMessages([msg.id], "everyone");
+                    }
+                  }}
+                  disabled={deletingMessages}
+                >
+                  <Ionicons name="trash" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.deleteForEveryoneText}>Delete for everyone</Text>
+                </Pressable>
+              )}
+
+              <Pressable
+                style={[styles.deleteDialogBtn, styles.deleteForMeBtn, { borderColor: colors.border }]}
+                onPress={() => {
+                  const msg = deleteTargetMessage;
+                  setDeleteTargetMessage(null);
+                  if (msg) {
+                    void deleteMessages([msg.id], "me");
+                  }
+                }}
+                disabled={deletingMessages}
+              >
+                <Ionicons name="person-remove-outline" size={17} color={colors.text} style={{ marginRight: 6 }} />
+                <Text style={[styles.deleteForMeText, { color: colors.text }]}>Delete for me</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.deleteDialogBtn, styles.deleteCancelBtn]}
+                onPress={() => setDeleteTargetMessage(null)}
+              >
+                <Text style={[styles.deleteCancelText, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Extended Emoji Reaction Picker Modal */}
+      <Modal
+        visible={extendedEmojiPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExtendedEmojiPickerVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setExtendedEmojiPickerVisible(false)}>
+          <Pressable style={[styles.extendedEmojiSheet, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.extendedEmojiTitle, { color: colors.text }]}>Reactions</Text>
+            <ScrollView contentContainerStyle={styles.extendedEmojiGrid}>
+              {EXTENDED_REACTIONS.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  style={styles.extendedEmojiItem}
+                  onPress={() => {
+                    if (actionMessage) {
+                      void handleToggleReaction(actionMessage, emoji);
+                    }
+                    setExtendedEmojiPickerVisible(false);
+                    setActionMessage(null);
+                  }}
+                >
+                  <Text style={styles.extendedEmojiText}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Message Info Sheet Modal */}
+      <Modal
+        visible={!!infoMessage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoMessage(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setInfoMessage(null)}>
+          <Pressable style={[styles.infoSheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.infoHeaderRow}>
+              <Ionicons name="information-circle" size={24} color={colors.accentText} />
+              <Text style={[styles.infoSheetTitle, { color: colors.text }]}>Message info</Text>
+            </View>
+
+            <View style={[styles.infoPreviewBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.infoPreviewSender, { color: colors.accentText }]}>{infoMessage?.sender_username}</Text>
+              <Text style={[styles.infoPreviewText, { color: colors.text }]}>{infoMessage ? getMessagePreview(infoMessage, t) : ""}</Text>
+            </View>
+
+            <View style={[styles.infoDetailsList, { borderColor: colors.border }]}>
+              <View style={[styles.infoDetailRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.infoDetailLeft}>
+                  <Ionicons name="time-outline" size={18} color={colors.textMuted} />
+                  <Text style={[styles.infoDetailLabel, { color: colors.textMuted }]}>Sent</Text>
+                </View>
+                <Text style={[styles.infoDetailValue, { color: colors.text }]}>
+                  {infoMessage ? new Date(infoMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ""}
+                </Text>
+              </View>
+
+              {infoMessage?.edited_at && (
+                <View style={[styles.infoDetailRow, { borderBottomColor: colors.border }]}>
+                  <View style={styles.infoDetailLeft}>
+                    <Ionicons name="create-outline" size={18} color={colors.textMuted} />
+                    <Text style={[styles.infoDetailLabel, { color: colors.textMuted }]}>Edited</Text>
+                  </View>
+                  <Text style={[styles.infoDetailValue, { color: colors.text }]}>
+                    {new Date(infoMessage.edited_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+
+              <View style={[styles.infoDetailRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.infoDetailLeft}>
+                  <Ionicons
+                    name={infoMessage?.read ? "checkmark-done" : "checkmark"}
+                    size={18}
+                    color={infoMessage?.read ? colors.accentText : colors.textMuted}
+                  />
+                  <Text style={[styles.infoDetailLabel, { color: colors.textMuted }]}>Status</Text>
+                </View>
+                <Text style={[styles.infoDetailValue, { color: infoMessage?.read ? colors.accentText : colors.text }]}>
+                  {infoMessage?.read ? "Read" : "Delivered"}
+                </Text>
+              </View>
+
+              <View style={styles.infoDetailRow}>
+                <View style={styles.infoDetailLeft}>
+                  <Ionicons name="layers-outline" size={18} color={colors.textMuted} />
+                  <Text style={[styles.infoDetailLabel, { color: colors.textMuted }]}>Type</Text>
+                </View>
+                <Text style={[styles.infoDetailValue, { color: colors.text, textTransform: "capitalize" }]}>
+                  {infoMessage?.message_type}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable style={[styles.infoCloseBtn, { backgroundColor: colors.accentText }]} onPress={() => setInfoMessage(null)}>
+              <Text style={styles.infoCloseBtnText}>Close</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2342,10 +2771,155 @@ function createStyles(
     searchText: { flex: 1, fontSize: 14 },
     searchCancel: { fontSize: 14, fontWeight: "600" },
     selectionBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },
+    selectionCountRow: { flexDirection: "row", alignItems: "center" },
     selectionCount: { fontSize: 14, fontWeight: "700" },
-    selectionActions: { flexDirection: "row", gap: 20 },
+    selectionActions: { flexDirection: "row", gap: 12, alignItems: "center" },
+    selectionActionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
     selectionActionText: { fontSize: 14, fontWeight: "700" },
-    menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+    pinnedBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginHorizontal: 12,
+      marginTop: 6,
+      marginBottom: 4,
+      borderRadius: 12,
+      borderWidth: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 3,
+      elevation: 2,
+      overflow: "hidden",
+    },
+    pinnedIndicator: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
+    pinnedContent: { flex: 1, marginLeft: 6 },
+    pinnedHeaderRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 },
+    pinnedLabel: { fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 },
+    pinnedPreviewText: { fontSize: 13, lineHeight: 18 },
+    pinnedUnpinBtn: { padding: 4, marginLeft: 8 },
+    actionSheetContainer: { width: "100%", paddingHorizontal: 16, paddingBottom: 24, gap: 10 },
+    floatingReactionPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      alignSelf: "center",
+      borderRadius: 28,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    reactionBubble: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+    reactionBubbleEmoji: { fontSize: 24 },
+    reactionPlusBtn: { width: 36, height: 36, borderRadius: 18, marginLeft: 4 },
+    actionMessagePreviewCard: {
+      borderRadius: 14,
+      borderWidth: 1,
+      padding: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    actionPreviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    actionPreviewSender: { fontSize: 12, fontWeight: "700" },
+    actionPreviewTime: { fontSize: 11 },
+    actionPreviewText: { fontSize: 14, lineHeight: 19 },
+    whatsappMenuCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    whatsappMenuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      gap: 14,
+    },
+    whatsappMenuItemLast: { borderBottomWidth: 0 },
+    whatsappMenuText: { fontSize: 15, fontWeight: "600" },
+    modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
+    deleteDialogCard: {
+      width: "100%",
+      maxWidth: 360,
+      borderRadius: 20,
+      borderWidth: 1,
+      padding: 20,
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    deleteDialogHeader: { alignItems: "center", marginBottom: 18 },
+    deleteIconCircle: { width: 54, height: 54, borderRadius: 27, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+    deleteDialogTitle: { fontSize: 18, fontWeight: "800", marginBottom: 6, textAlign: "center" },
+    deleteDialogSubtitle: { fontSize: 13, textAlign: "center", lineHeight: 18 },
+    deleteDialogActions: { width: "100%", gap: 10 },
+    deleteDialogBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 13, borderRadius: 12, width: "100%" },
+    deleteForEveryoneBtn: { backgroundColor: "#E53935" },
+    deleteForEveryoneText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+    deleteForMeBtn: { borderWidth: 1, backgroundColor: "transparent" },
+    deleteForMeText: { fontSize: 15, fontWeight: "700" },
+    deleteCancelBtn: { paddingVertical: 10 },
+    deleteCancelText: { fontSize: 15, fontWeight: "600" },
+    extendedEmojiSheet: {
+      width: "100%",
+      maxWidth: 380,
+      maxHeight: 420,
+      borderRadius: 20,
+      borderWidth: 1,
+      padding: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    extendedEmojiTitle: { fontSize: 16, fontWeight: "800", textAlign: "center", marginBottom: 14 },
+    extendedEmojiGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, paddingBottom: 16 },
+    extendedEmojiItem: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+    extendedEmojiText: { fontSize: 26 },
+    infoSheetCard: {
+      width: "100%",
+      maxWidth: 380,
+      borderRadius: 20,
+      borderWidth: 1,
+      padding: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    infoHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
+    infoSheetTitle: { fontSize: 18, fontWeight: "800" },
+    infoPreviewBox: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 16 },
+    infoPreviewSender: { fontSize: 12, fontWeight: "700", marginBottom: 2 },
+    infoPreviewText: { fontSize: 13, lineHeight: 18 },
+    infoDetailsList: { borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 18 },
+    infoDetailRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+    infoDetailLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+    infoDetailLabel: { fontSize: 13, fontWeight: "600" },
+    infoDetailValue: { fontSize: 13, fontWeight: "700" },
+    infoCloseBtn: { alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 12 },
+    infoCloseBtnText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+    menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
     modalDismissArea: { flex: 1, justifyContent: "flex-end" },
     menuSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 24, paddingHorizontal: 8 },
     menuHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 10, marginBottom: 8 },

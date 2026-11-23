@@ -929,24 +929,33 @@ class ForwardMessageView(generics.GenericAPIView):
 
 
 class ConversationMessagesDeleteView(generics.GenericAPIView):
-    """Let a participant permanently unsend only messages they authored."""
+    """Let a participant permanently unsend messages they authored (everyone) or hide any messages (me)."""
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, pk):
         conversation = get_object_or_404(conversations_visible_to_user(request.user), id=pk)
+        delete_type = request.data.get("delete_type") or request.query_params.get("delete_type") or "everyone"
         message_ids = request.data.get("message_ids")
         if message_ids is None and request.query_params.get("message_ids"):
             try:
                 message_ids = [int(value) for value in request.query_params.get("message_ids", "").split(",") if value.strip()]
             except ValueError:
                 return Response({"message_ids": "Provide comma-separated message IDs."}, status=status.HTTP_400_BAD_REQUEST)
-        messages = conversation.messages.filter(sender=request.user)
 
+        messages = conversation.messages.all()
         if message_ids is not None:
             if not isinstance(message_ids, list) or not all(isinstance(value, int) for value in message_ids):
                 return Response({"message_ids": "Provide a list of message IDs."}, status=status.HTTP_400_BAD_REQUEST)
             messages = messages.filter(id__in=message_ids)
 
+        if delete_type == "me":
+            count = 0
+            for message in messages:
+                message.deleted_by.add(request.user)
+                count += 1
+            return Response({"deleted_count": count, "delete_type": "me"}, status=status.HTTP_200_OK)
+
+        messages = messages.filter(sender=request.user)
         # Django does not delete files when a FileField row is deleted.
         for message in messages:
             if message.image:
@@ -955,7 +964,38 @@ class ConversationMessagesDeleteView(generics.GenericAPIView):
                 message.document.delete(save=False)
 
         deleted_count, _ = messages.delete()
-        return Response({"deleted_count": deleted_count}, status=status.HTTP_200_OK)
+        return Response({"deleted_count": deleted_count, "delete_type": "everyone"}, status=status.HTTP_200_OK)
+
+
+class ConversationPinMessageView(generics.GenericAPIView):
+    """Pin or unpin a message in the conversation."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        conversation = get_object_or_404(conversations_visible_to_user(request.user), id=pk)
+        message_id = request.data.get("message_id")
+        if not message_id:
+            conversation.pinned_message = None
+            conversation.save(update_fields=["pinned_message"])
+            return Response({"pinned_message": None}, status=status.HTTP_200_OK)
+
+        message = get_object_or_404(conversation.messages.all(), id=message_id)
+        if conversation.pinned_message_id == message.id:
+            conversation.pinned_message = None
+            conversation.save(update_fields=["pinned_message"])
+            return Response({"pinned_message": None}, status=status.HTTP_200_OK)
+        else:
+            conversation.pinned_message = message
+            conversation.save(update_fields=["pinned_message"])
+            return Response({
+                "pinned_message": MessageSerializer(message, context={"request": request}).data
+            }, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        conversation = get_object_or_404(conversations_visible_to_user(request.user), id=pk)
+        conversation.pinned_message = None
+        conversation.save(update_fields=["pinned_message"])
+        return Response({"pinned_message": None}, status=status.HTTP_200_OK)
 
 
 class ConversationTypingView(generics.GenericAPIView):
