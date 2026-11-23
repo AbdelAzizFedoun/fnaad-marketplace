@@ -1123,22 +1123,26 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
   };
 
   const openMap = async (lat: number, lng: number) => {
-    if (Platform.OS === "web") {
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (permission.status === "granted") {
-          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          setRouteMap({ latitude: lat, longitude: lng, start: { latitude: position.coords.latitude, longitude: position.coords.longitude } });
-          return;
-        }
-      } catch { /* Fall through to the external map link. */ }
-    }
-    const query = `${lat},${lng}`;
-    // Google Maps app first, then the platform geo: handler, then the web link.
+    let origin: { latitude: number; longitude: number } | null = null;
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status === "granted") {
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        origin = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      }
+    } catch { /* Use the destination-only fallback below. */ }
+
+    const destination = `${lat},${lng}`;
+    const directionsUrl = origin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${encodeURIComponent(destination)}&travelmode=driving&dir_action=navigate`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`;
+
+    // Open a complete Google Maps driving route: ETA, distance, turn-by-turn
+    // directions, traffic-aware alternatives, and the fastest route.
     const candidates = [
-      `comgooglemaps://?q=${encodeURIComponent(query)}`,
+      directionsUrl,
+      `comgooglemaps://?daddr=${encodeURIComponent(destination)}&directionsmode=driving`,
       `geo:${lat},${lng}?q=${lat},${lng}`,
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`,
     ];
 
     for (const url of candidates) {
