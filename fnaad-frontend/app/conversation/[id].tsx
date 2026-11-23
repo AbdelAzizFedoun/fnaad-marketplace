@@ -16,6 +16,7 @@ import { saveMessagesCache, getMessagesCache } from "../../services/offlineCache
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useVoiceCall } from "../../hooks/useVoiceCall";
 import VoiceCallOverlay from "../../components/VoiceCallOverlay";
+import LocationRouteMap from "../../components/LocationRouteMap";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -820,6 +821,7 @@ export default function ConversationScreen() {
   const [sendingMedia, setSendingMedia] = useState(false);
   const [sharingLocation, setSharingLocation] = useState(false);
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+  const [routeMap, setRouteMap] = useState<{ latitude: number; longitude: number; start: { latitude: number; longitude: number } } | null>(null);
   const [attachVisible, setAttachVisible] = useState(false);
   const [clearMenuVisible, setClearMenuVisible] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -1121,6 +1123,16 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
   };
 
   const openMap = async (lat: number, lng: number) => {
+    if (Platform.OS === "web") {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status === "granted") {
+          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setRouteMap({ latitude: lat, longitude: lng, start: { latitude: position.coords.latitude, longitude: position.coords.longitude } });
+          return;
+        }
+      } catch { /* Fall through to the external map link. */ }
+    }
     const query = `${lat},${lng}`;
     // Google Maps app first, then the platform geo: handler, then the web link.
     const candidates = [
@@ -2365,6 +2377,23 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={!!routeMap}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRouteMap(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.58)", justifyContent: "center", padding: 16 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 22, padding: 12, maxWidth: 760, width: "100%", alignSelf: "center" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, paddingBottom: 10 }}>
+              <Text style={{ color: colors.text, fontSize: 17, fontWeight: "800" }}>Client route</Text>
+              <Pressable onPress={() => setRouteMap(null)} hitSlop={10}><Ionicons name="close" size={24} color={colors.textMuted} /></Pressable>
+            </View>
+            {routeMap ? <LocationRouteMap start={routeMap.start} destination={routeMap} /> : null}
+          </View>
+        </View>
       </Modal>
 
       <Modal
