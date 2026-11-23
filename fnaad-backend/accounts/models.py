@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
+from .storage import studio_video_storage
 
 
 class UserManager(BaseUserManager):
@@ -135,7 +136,7 @@ class ArtistProfile(models.Model):
 class ArtistStudioPhoto(models.Model):
     artist = models.ForeignKey(ArtistProfile, on_delete=models.CASCADE, related_name="studio_photos")
     image = models.ImageField(upload_to="artists/studio/", null=True, blank=True)
-    video = models.FileField(upload_to="artists/studio/videos/", blank=True)
+    video = models.FileField(storage=studio_video_storage, upload_to="artists/studio/videos/", blank=True)
     duration_seconds = models.PositiveSmallIntegerField(null=True, blank=True)
     caption = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
