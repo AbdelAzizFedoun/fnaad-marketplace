@@ -594,8 +594,11 @@ class ArtistStudioPhotoSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         image = attrs.get("image")
         video = attrs.get("video")
-        if bool(image) == bool(video):
-            raise serializers.ValidationError("Upload either one image or one video.")
+        caption = (attrs.get("caption") or "").strip()
+        if not image and not video and not caption:
+            raise serializers.ValidationError({"caption": "Write a message or select a photo/video."})
+        if image and video:
+            raise serializers.ValidationError("Upload one photo or one video, not both.")
 
         if video:
             if video.size > 100 * 1024 * 1024:
@@ -606,7 +609,11 @@ class ArtistStudioPhotoSerializer(serializers.ModelSerializer):
         return attrs
 
     def get_media_type(self, obj):
-        return "video" if obj.video else "image"
+        if obj.video:
+            return "video"
+        if obj.image:
+            return "image"
+        return "text"
 
 
 class ArtistStorySerializer(ArtistStudioPhotoSerializer):

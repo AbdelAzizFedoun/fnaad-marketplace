@@ -609,21 +609,20 @@ export const uploadStudioMedia = (media: {
   fileName?: string | null;
   mimeType?: string | null;
   file?: File | null;
-  type: "image" | "video";
-}, caption: string) => {
+  type: "image" | "video" | "text";
+}, caption: string, onUploadProgress?: (progress: number) => void) => {
   const formData = new FormData();
-  formData.append(
-    media.type,
-    Platform.OS === "web" && media.file
-      ? media.file
-      : ({
-          uri: media.uri,
-          name: media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg"),
-          type: media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg"),
-        } as any),
-  );
+  if (media.type !== "text") formData.append(media.type, Platform.OS === "web" && media.file ? media.file : ({
+    uri: media.uri,
+    name: media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg"),
+    type: media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg"),
+  } as any));
   formData.append("caption", caption);
-  return api.post("/catalog/artists/me/studio/", formData);
+  return api.post("/catalog/artists/me/studio/", formData, {
+    onUploadProgress: (event) => {
+      if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100));
+    },
+  });
 };
 export const deleteStudioPhoto = (photoId: number) =>
   api.delete(`/catalog/artists/me/studio/${photoId}/`);

@@ -148,6 +148,7 @@ class ArtistStudioPhoto(models.Model):
                 condition=(
                     models.Q(image__isnull=False, image__gt="", video="")
                     | models.Q(image="", video__gt="")
+                    | models.Q(image="", video="", caption__gt="")
                 ),
                 name="studio_media_exactly_one_file",
             ),

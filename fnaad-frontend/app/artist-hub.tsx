@@ -17,6 +17,7 @@ type MenuItem = {
 };
 
 const ITEMS: MenuItem[] = [
+  { icon: "add-circle-outline", labelKey: "createStatus", route: "/create-status" },
   { icon: "add-circle-outline", labelKey: "addProduct", route: "/add-product" },
   { icon: "images-outline", labelKey: "myProducts", route: "/my-products" },
   { icon: "bar-chart-outline", labelKey: "myAnalytics", route: "/artist-analytics" },

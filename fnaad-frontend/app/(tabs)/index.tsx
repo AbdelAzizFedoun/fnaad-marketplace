@@ -53,7 +53,7 @@ type ArtistStory = {
   artist_avatar: string | null;
   image: string | null;
   video: string | null;
-  media_type: "image" | "video";
+  media_type: "image" | "video" | "text";
   caption: string;
   created_at: string;
   like_count: number;
@@ -737,7 +737,9 @@ export default function GalleryScreen() {
           <View style={styles.storyBackdrop}>
             {activeStory && activeStoryGroup ? (
               <View style={styles.storyViewer}>
-                {activeStory.media_type === "video" && activeStory.video ? (
+                {activeStory.media_type === "text" ? (
+                  <View style={styles.storyTextStatus}><Ionicons name="chatbubble-ellipses-outline" size={30} color="#D4AF37" /><Text style={styles.storyTextStatusBody}>{activeStory.caption}</Text></View>
+                ) : activeStory.media_type === "video" && activeStory.video ? (
                   <StoryVideo key={activeStory.id} uri={resolveMediaUrl(activeStory.video)!} />
                 ) : activeStory.image ? (
                   <Image source={{ uri: resolveMediaUrl(activeStory.image)! }} style={styles.storyMedia} resizeMode="contain" />
@@ -1451,6 +1453,8 @@ function createStyles(
     storyViewer: { width: "100%", height: "90%", maxWidth: 480, maxHeight: 850, borderRadius: 20, overflow: "hidden", backgroundColor: "#111111", position: "relative" },
     storyMedia: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
     storyMediaFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+    storyTextStatus: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: "#17121B" },
+    storyTextStatusBody: { color: "#FFFFFF", fontSize: 22, lineHeight: 30, fontWeight: "700", textAlign: "center", marginTop: 16 },
     storyTopOverlay: { position: "absolute", top: 0, left: 0, right: 0, paddingTop: 12, paddingHorizontal: 12, backgroundColor: "rgba(0,0,0,0.35)" },
     storyProgressRow: { flexDirection: "row", gap: 4, marginBottom: 12 },
     storyProgressTrack: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.42)", overflow: "hidden" },
