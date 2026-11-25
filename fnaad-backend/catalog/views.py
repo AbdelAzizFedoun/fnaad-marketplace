@@ -79,6 +79,7 @@ def product_public_view(request, slug):
             request.build_absolute_uri(image.image.url)
             for image in images
         ],
+        "web_product_url": f"https://fnaad-marketplace.fnaad-marketplace.workers.dev/product/{product.id}",
     })
 
 def user_is_artist(user):
