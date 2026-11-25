@@ -9,6 +9,7 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from django.conf import settings
 from rest_framework.exceptions import APIException, ValidationError
@@ -1226,6 +1227,16 @@ class ProductUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
             Product.STATUS_PENDING if site_settings.require_product_approval else Product.STATUS_APPROVED
         )
         serializer.save(status=new_status)
+
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            # Keep order history valid while removing the artwork from all
+            # public galleries and artist listings.
+            instance.status = Product.STATUS_HIDDEN
+            instance.is_public_visible = False
+            instance.save(update_fields=["status", "is_public_visible"])
 
 class ProductMarkSoldView(generics.UpdateAPIView):
     """

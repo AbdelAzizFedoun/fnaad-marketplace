@@ -9,6 +9,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import { shadow, RADIUS } from "../components/shadow";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import { removeProductFromCatalogCache } from "../services/offlineCache";
 
 type Product = {
   id: number;
@@ -63,6 +64,7 @@ export default function MyProductsScreen() {
     try {
       await deleteProduct(id);
       setProducts((prev) => prev.filter((p) => p.id !== id));
+      await removeProductFromCatalogCache(id);
     } catch (err: any) {
       console.log("Delete error:", err.response?.data || err.message);
     } finally {

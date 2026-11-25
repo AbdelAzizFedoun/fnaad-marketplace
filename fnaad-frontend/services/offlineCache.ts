@@ -41,6 +41,15 @@ export async function getCatalogCache(): Promise<any[] | null> {
   }
 }
 
+export async function removeProductFromCatalogCache(productId: number): Promise<void> {
+  try {
+    const cached = await getCatalogCache();
+    if (cached) await AsyncStorage.setItem(KEY_CATALOG, JSON.stringify(cached.filter((product) => product.id !== productId)));
+  } catch (err) {
+    console.warn("[offlineCache] Failed to remove deleted product:", err);
+  }
+}
+
 /**
  * Cache single product details
  */
