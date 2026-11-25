@@ -612,6 +612,12 @@ export const uploadStudioMedia = (media: {
   type: "image" | "video" | "text";
 }, caption: string, onUploadProgress?: (progress: number) => void) => {
   const formData = new FormData();
+  const uploadConfig = {
+    timeout: 300_000,
+    onUploadProgress: (event: { loaded: number; total?: number }) => {
+      if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100));
+    },
+  };
   if (media.type !== "text") {
     const name = media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg");
     const type = media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg");
@@ -622,16 +628,12 @@ export const uploadStudioMedia = (media: {
       return fetch(media.uri).then((response) => response.blob()).then((blob) => {
         formData.append(media.type, blob, name);
         formData.append("caption", caption);
-        return api.post("/catalog/artists/me/studio/", formData, { onUploadProgress: (event) => { if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100)); } });
+        return api.post("/catalog/artists/me/studio/", formData, uploadConfig);
       });
     } else formData.append(media.type, { uri: media.uri, name, type } as any);
   }
   formData.append("caption", caption);
-  return api.post("/catalog/artists/me/studio/", formData, {
-    onUploadProgress: (event) => {
-      if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100));
-    },
-  });
+  return api.post("/catalog/artists/me/studio/", formData, uploadConfig);
 };
 export const deleteStudioPhoto = (photoId: number) =>
   api.delete(`/catalog/artists/me/studio/${photoId}/`);

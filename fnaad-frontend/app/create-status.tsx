@@ -11,6 +11,27 @@ import { useTheme } from "../context/ThemeContext";
 type SelectedMedia = { uri: string; fileName?: string | null; mimeType?: string | null; file?: File | null; type: "image" | "video" };
 type ActiveStatus = { id: number; image: string | null; video: string | null; media_type: "image" | "video" | "text"; caption: string; created_at: string };
 
+function getPublishErrorMessage(error: any) {
+  const data = error?.response?.data;
+  for (const value of [data?.detail, data?.video, data?.caption]) {
+    if (typeof value === "string" && value.trim()) return value;
+    if (Array.isArray(value)) {
+      const message = value.find((item) => typeof item === "string" && item.trim());
+      if (message) return message;
+    }
+  }
+  if (error?.response?.status === 413) {
+    return "The video is too large for the server to accept. Choose a smaller video.";
+  }
+  if (error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT") {
+    return "The upload timed out. Try a smaller video or a faster connection.";
+  }
+  if (error?.response?.status) {
+    return `Upload failed (HTTP ${error.response.status}). Please try again.`;
+  }
+  return "Could not reach the server. Check your connection and try again.";
+}
+
 function VideoStatusPreview({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri);
   return <VideoView player={player} style={styles.previewImage} nativeControls contentFit="cover" />;
@@ -48,7 +69,7 @@ export default function CreateStatusScreen() {
       setActiveStatuses((current) => [data, ...current]);
       Alert.alert("Status published", "Your status is now visible for 24 hours.", [{ text: "Done", onPress: () => router.back() }]);
     } catch (error: any) {
-      setPublishError(error?.response?.data?.detail || error?.response?.data?.caption?.[0] || error?.response?.data?.video?.[0] || "Could not publish status. Please try again.");
+      setPublishError(getPublishErrorMessage(error));
     } finally { setSaving(false); setProgress(0); }
   };
 
