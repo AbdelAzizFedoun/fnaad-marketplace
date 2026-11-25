@@ -9,6 +9,10 @@ timeout = 360
 accesslog = "-"
 errorlog = "-"
 
+# Allow video uploads up to ~110 MB (matches DATA_UPLOAD_MAX_MEMORY_SIZE).
+# Gunicorn's default (0) means unlimited, but set it explicitly for clarity.
+limit_request_body = 115_343_360  # 110 MB
+
 
 def on_starting(server):
     """Run database migrations when Gunicorn master process boots up."""

@@ -223,6 +223,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'EXCEPTION_HANDLER': 'config.exception_handler.custom_exception_handler',
     # The auth scopes slow down password brute force and account creation
     # on the anonymous endpoints. They are keyed per IP for anonymous
     # callers, so a shared cache (Redis) is needed for multi-worker deploys.
@@ -235,8 +236,17 @@ REST_FRAMEWORK = {
 }
 
 # Hard ceiling on request bodies.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
-FILE_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
+# Videos can be up to 100 MB, so the request body limit must accommodate that
+# plus the multipart overhead (caption, boundaries, headers).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 110 * 1024 * 1024   # 110 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440            # 2.5 MB – files larger than this are streamed to disk
+
+# Ensure large uploads (like videos) go straight to a temporary file on disk
+# instead of being buffered entirely in memory.
+FILE_UPLOAD_HANDLERS = [
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+]
 
 # JWT tokens. Short-lived access tokens plus longer-lived refresh tokens
 # that rotate on every use: a stolen refresh token stops working after
