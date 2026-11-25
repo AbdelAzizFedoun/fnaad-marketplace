@@ -1229,14 +1229,18 @@ class ProductUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
         serializer.save(status=new_status)
 
     def perform_destroy(self, instance):
+        # Hide the artwork before attempting the database delete. This makes
+        # removal from every public gallery immediate, including products
+        # whose order history prevents a hard delete.
+        instance.is_public_visible = False
+        instance.save(update_fields=["is_public_visible"])
         try:
             instance.delete()
         except ProtectedError:
             # Keep order history valid while removing the artwork from all
             # public galleries and artist listings.
             instance.status = Product.STATUS_HIDDEN
-            instance.is_public_visible = False
-            instance.save(update_fields=["status", "is_public_visible"])
+            instance.save(update_fields=["status"])
 
 class ProductMarkSoldView(generics.UpdateAPIView):
     """

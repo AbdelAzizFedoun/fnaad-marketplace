@@ -9,9 +9,16 @@
   <meta property="og:description" content="{{ product.price_xaf }} XAF — Discover this artwork on FNAAD" />
   {% if image_url %}
   <meta property="og:image" content="{{ image_url }}" />
+  <meta property="og:image:secure_url" content="{{ image_url }}" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:alt" content="{{ product.title }}" />
   {% endif %}
   <meta property="og:type" content="product" />
   <meta property="og:url" content="{{ product.public_url }}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ product.title }} — {{ product.artist.brand_name }}" />
+  <meta name="twitter:description" content="{{ product.price_xaf }} XAF — Discover this artwork on FNAAD" />
+  {% if image_url %}<meta name="twitter:image" content="{{ image_url }}" />{% endif %}
 
   <style>
     body {

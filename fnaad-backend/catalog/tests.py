@@ -300,6 +300,21 @@ class CatalogPermissionTests(APITestCase):
         self.assertEqual(product.artist.user, artist_without_profile)
         self.assertEqual(product.status, Product.STATUS_PENDING)
 
+    def test_artist_delete_removes_product_from_public_gallery(self):
+        self.authenticate(self.artist)
+
+        response = self.client.delete(
+            reverse("product-edit", args=[self.product.id])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Product.objects.filter(pk=self.product.id).exists())
+
+        gallery_response = self.client.get(reverse("product-list"))
+        self.assertEqual(gallery_response.status_code, status.HTTP_200_OK)
+        results = gallery_response.data.get("results", gallery_response.data)
+        self.assertNotIn(self.product.id, [item["id"] for item in results])
+
     def test_artist_can_upload_a_product_image(self):
         """The image upload endpoint must persist the multipart file, not only its row."""
         self.authenticate(self.artist)
@@ -904,6 +919,24 @@ class ArtistStudioPhotoApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(self.other_artist.studio_photos.filter(pk=photo.id).exists())
+
+    def test_studio_persistence_errors_are_logged_and_reraised(self):
+        self.client.force_authenticate(self.artist_user)
+
+        with patch(
+            "catalog.views.ArtistStudioPhotoSerializer.save",
+            side_effect=RuntimeError("storage failure"),
+        ):
+            with self.assertLogs("catalog.views", level="ERROR") as captured:
+                with self.assertRaisesRegex(RuntimeError, "storage failure"):
+                    self.client.post(
+                        reverse("artist-studio-photos"),
+                        {"caption": "Text status"},
+                        format="multipart",
+                    )
+
+        self.assertIn("Studio media persistence failed", captured.output[0])
+        self.assertIn("RuntimeError: storage failure", "\n".join(captured.output))
 
     @patch("catalog.views.probe_video_duration", return_value=120.0)
     def test_artist_can_upload_and_publicly_view_studio_video(self, _probe_video):
