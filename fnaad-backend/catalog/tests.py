@@ -20,8 +20,29 @@ from accounts.models import (
     ArtistStudioStoryLike,
     ArtistStudioStoryView,
 )
+from .studio_media import probe_video_duration
 from .models import Conversation, Message, Product, SpotlightFeature
 from .serializers import ProductImageSerializer
+
+
+class StudioVideoProbeTests(SimpleTestCase):
+    @patch("catalog.studio_media.subprocess.run")
+    @patch("catalog.studio_media.shutil.which", return_value="/usr/bin/ffmpeg")
+    def test_probe_rewinds_temporary_uploaded_file(self, _which, run):
+        run.return_value = SimpleNamespace(
+            stderr="Duration: 00:01:00.00\nVideo: h264",
+        )
+
+        uploaded_file = SimpleNamespace(
+            temporary_file_path=lambda: "studio-temp.mp4",
+            seek=lambda position: setattr(uploaded_file, "position", position),
+            position=123,
+        )
+
+        duration = probe_video_duration(uploaded_file)
+
+        self.assertEqual(duration, 60.0)
+        self.assertEqual(uploaded_file.position, 0)
 
 
 class ProductImageUrlTests(SimpleTestCase):

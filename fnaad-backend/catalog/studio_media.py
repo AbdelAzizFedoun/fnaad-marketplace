@@ -77,7 +77,8 @@ def probe_video_duration(uploaded_file):
     finally:
         if temporary_directory is not None:
             temporary_directory.cleanup()
-        # Reset file pointer so subsequent reads/uploads get the complete file from byte 0
+        # Reset the upload pointer for both memory-backed and temporary-file
+        # uploads. Storage saves the file after probing, so it must not start at EOF.
         try:
             uploaded_file.seek(0)
         except Exception:
