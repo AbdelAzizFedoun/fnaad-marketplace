@@ -612,11 +612,20 @@ export const uploadStudioMedia = (media: {
   type: "image" | "video" | "text";
 }, caption: string, onUploadProgress?: (progress: number) => void) => {
   const formData = new FormData();
-  if (media.type !== "text") formData.append(media.type, Platform.OS === "web" && media.file ? media.file : ({
-    uri: media.uri,
-    name: media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg"),
-    type: media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg"),
-  } as any));
+  if (media.type !== "text") {
+    const name = media.fileName || (media.type === "video" ? "studio-video.mp4" : "studio-photo.jpg");
+    const type = media.mimeType || (media.type === "video" ? "video/mp4" : "image/jpeg");
+    if (Platform.OS === "web" && media.file) formData.append(media.type, media.file, name);
+    else if (Platform.OS === "web") {
+      // Expo web can return a URI without a File object. Convert it to a real
+      // Blob so Django receives a multipart upload instead of a plain string.
+      return fetch(media.uri).then((response) => response.blob()).then((blob) => {
+        formData.append(media.type, blob, name);
+        formData.append("caption", caption);
+        return api.post("/catalog/artists/me/studio/", formData, { onUploadProgress: (event) => { if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100)); } });
+      });
+    } else formData.append(media.type, { uri: media.uri, name, type } as any);
+  }
   formData.append("caption", caption);
   return api.post("/catalog/artists/me/studio/", formData, {
     onUploadProgress: (event) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Alert } from "react-native";
 import Image from "../components/MediaImage";
 import { useRouter } from "expo-router";
 import { getMyProducts, deleteProduct, getMyArtistProfile, resolveMediaUrl, markProductSold } from "../services/api";
@@ -67,6 +67,7 @@ export default function MyProductsScreen() {
       await removeProductFromCatalogCache(id);
     } catch (err: any) {
       console.log("Delete error:", err.response?.data || err.message);
+      Alert.alert("Could not delete artwork", err.response?.data?.detail || "Please refresh and try again.");
     } finally {
       setDeletingId(null);
       setConfirmingId(null);
