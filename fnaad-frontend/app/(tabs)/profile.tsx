@@ -94,6 +94,7 @@ export default function ProfileHubScreen() {
       <MenuRow icon="heart-outline" label={t("savedArtworks")} onPress={() => router.push("/(tabs)/favorites")} colors={colors} />
       <MenuRow icon="color-palette-outline" label={t("myArtworkRequests")} onPress={() => router.push("/my-commissions")} colors={colors} />
       {user?.is_artist && <>
+        <MenuRow icon="radio-outline" label={t("createStatus") || "Create status"} onPress={() => router.push("/create-status")} colors={colors} />
         <MenuRow icon="brush-outline" label={t("editArtistProfile")} onPress={() => router.push("/edit-artist-profile")} colors={colors} />
         <MenuRow icon="images-outline" label={t("myArtworks")} onPress={() => router.push("/my-products")} colors={colors} />
       </>}
