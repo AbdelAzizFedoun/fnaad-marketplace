@@ -20,7 +20,7 @@ from accounts.models import (
     ArtistStudioStoryLike,
     ArtistStudioStoryView,
 )
-from .models import Conversation, Message, Product
+from .models import Conversation, Message, Product, SpotlightFeature
 from .serializers import ProductImageSerializer
 
 
@@ -579,6 +579,26 @@ class CatalogPermissionTests(APITestCase):
         self.authenticate(self.staff)
         staff_response = self.client.get(reverse("admin-dashboard"))
         self.assertEqual(staff_response.status_code, status.HTTP_200_OK)
+
+    def test_approved_spotlight_disappears_from_admin_queue(self):
+        feature = SpotlightFeature.objects.create(
+            product=self.product,
+            artist_approved=True,
+        )
+        self.authenticate(self.staff)
+
+        pending_response = self.client.get(reverse("admin-spotlight"))
+        self.assertEqual(pending_response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in pending_response.data], [feature.id])
+
+        approval_response = self.client.post(
+            reverse("admin-spotlight-approve", args=[feature.id])
+        )
+        self.assertEqual(approval_response.status_code, status.HTTP_200_OK)
+
+        refreshed_response = self.client.get(reverse("admin-spotlight"))
+        self.assertEqual(refreshed_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(refreshed_response.data, [])
 
     def test_conversation_status_cannot_be_changed_by_generic_put(self):
         conversation = Conversation.objects.create(product=self.product, customer=self.customer)

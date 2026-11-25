@@ -1792,7 +1792,10 @@ class AdminSpotlightFeaturesView(generics.ListAPIView):
     permission_classes = [IsSuperAdmin]
 
     def get_queryset(self):
-        return SpotlightFeature.objects.filter(artist_approved=True).select_related("product", "product__artist")
+        return SpotlightFeature.objects.filter(
+            artist_approved=True,
+            admin_approved=False,
+        ).select_related("product", "product__artist")
 
     def list(self, request, *args, **kwargs):
         return Response([{ "id": f.id, "product_id": f.product_id, "product_title": f.product.title, "artist_name": f.product.artist.brand_name, "artist_approved": f.artist_approved, "admin_approved": f.admin_approved } for f in self.get_queryset()[:50]])
