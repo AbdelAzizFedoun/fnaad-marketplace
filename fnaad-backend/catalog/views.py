@@ -1353,10 +1353,34 @@ class MyArtistStudioPhotoListCreateView(generics.ListCreateAPIView):
             locked_artist = ArtistProfile.objects.select_for_update().get(pk=artist_profile.pk)
             if video and locked_artist.studio_photos.filter(video__gt="").count() >= 3:
                 raise ValidationError({"video": "You can have up to three Studio videos."})
-            serializer.save(
-                artist=locked_artist,
-                duration_seconds=int(duration_seconds) if duration_seconds is not None else None,
-            )
+            try:
+                studio_media = serializer.save(
+                    artist=locked_artist,
+                    duration_seconds=int(duration_seconds) if duration_seconds is not None else None,
+                )
+            except Exception:
+                logger.exception(
+                    "Studio media persistence failed for artist %s",
+                    locked_artist.pk,
+                )
+                raise
+
+        # Studio uploads are public immediately: the public story endpoint
+        # exposes them for 24 hours and the artist profile keeps them in the
+        # permanent Studio archive. Notify current followers after the media
+        # has been persisted so a failed upload cannot create a false alert.
+        media_label = "video" if studio_media.video else "studio update"
+        for follow in ArtistFollow.objects.select_related("user").filter(artist=artist_profile):
+            try:
+                create_notification(
+                    follow.user,
+                    "New Studio update",
+                    f"{artist_profile.brand_name} shared a new {media_label} from the studio.",
+                    "artist_new_studio_story",
+                    {"story_id": studio_media.id, "artist_id": artist_profile.id},
+                )
+            except Exception:
+                logger.exception("Follower Studio notification failed for story %s", studio_media.id)
 
 
 class ArtistStoryListView(generics.ListAPIView):

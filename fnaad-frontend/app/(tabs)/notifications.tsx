@@ -201,7 +201,7 @@ export default function NotificationsScreen() {
       });
     }
 
-    if (["story_comment", "story_like"].includes(notification.notification_type) && notification.data.artist_id) {
+    if (["story_comment", "story_like", "artist_new_studio_story"].includes(notification.notification_type) && notification.data.artist_id) {
       router.push({
         pathname: "/artist/[id]",
         params: { id: String(notification.data.artist_id), tab: "studio" },
