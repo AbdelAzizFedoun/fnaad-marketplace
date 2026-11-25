@@ -604,7 +604,7 @@ export const getFollowerProfile = (userId: number) => api.get(`/accounts/followe
 export const getMyStudioPhotos = () => api.get("/catalog/artists/me/studio/");
 export const getMyStudioStoryAnalytics = () =>
   api.get("/catalog/artists/me/stories/analytics/");
-export const uploadStudioMedia = (media: {
+export const uploadStudioMedia = async (media: {
   uri: string;
   fileName?: string | null;
   mimeType?: string | null;
@@ -612,8 +612,10 @@ export const uploadStudioMedia = (media: {
   type: "image" | "video" | "text";
 }, caption: string, onUploadProgress?: (progress: number) => void) => {
   const formData = new FormData();
+  const token = await storage.getItem(ACCESS_KEY);
   const uploadConfig = {
     timeout: 300_000,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     onUploadProgress: (event: { loaded: number; total?: number }) => {
       if (event.total) onUploadProgress?.(Math.round((event.loaded / event.total) * 100));
     },
@@ -625,11 +627,11 @@ export const uploadStudioMedia = (media: {
     else if (Platform.OS === "web") {
       // Expo web can return a URI without a File object. Convert it to a real
       // Blob so Django receives a multipart upload instead of a plain string.
-      return fetch(media.uri).then((response) => response.blob()).then((blob) => {
-        formData.append(media.type, blob, name);
-        formData.append("caption", caption);
-        return api.post("/catalog/artists/me/studio/", formData, uploadConfig);
-      });
+      const response = await fetch(media.uri);
+      const blob = await response.blob();
+      formData.append(media.type, blob, name);
+      formData.append("caption", caption);
+      return api.post("/catalog/artists/me/studio/", formData, uploadConfig);
     } else formData.append(media.type, { uri: media.uri, name, type } as any);
   }
   formData.append("caption", caption);

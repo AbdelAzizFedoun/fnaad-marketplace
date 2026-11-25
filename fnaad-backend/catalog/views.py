@@ -1341,11 +1341,12 @@ class MyArtistStudioPhotoListCreateView(generics.ListCreateAPIView):
             except InvalidStudioVideo as exc:
                 raise ValidationError({"video": str(exc)}) from exc
             except VideoProbeUnavailable as exc:
-                raise VideoProbeUnavailableApiException(
-                    "Video validation is temporarily unavailable. Please try again later."
-                ) from exc
+                logger.warning("Video probe unavailable during studio upload: %s", exc)
+                # If FFmpeg probing cannot run in this environment, don't block the upload with a 500/503.
+                # Allow it through and let client/cloud storage handle playback.
+                duration_seconds = None
 
-            if duration_seconds > 180:
+            if duration_seconds is not None and duration_seconds > 180:
                 raise ValidationError({"video": "Videos must be 180 seconds or shorter."})
 
         with transaction.atomic():

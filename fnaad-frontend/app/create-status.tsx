@@ -13,7 +13,8 @@ type ActiveStatus = { id: number; image: string | null; video: string | null; me
 
 function getPublishErrorMessage(error: any) {
   const data = error?.response?.data;
-  for (const value of [data?.detail, data?.video, data?.caption]) {
+  if (typeof data === "string" && data.trim()) return data;
+  for (const value of [data?.detail, data?.video, data?.image, data?.caption, data?.non_field_errors]) {
     if (typeof value === "string" && value.trim()) return value;
     if (Array.isArray(value)) {
       const message = value.find((item) => typeof item === "string" && item.trim());
