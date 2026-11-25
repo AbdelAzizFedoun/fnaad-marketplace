@@ -10,6 +10,7 @@ import uuid
 
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from rest_framework.views import APIView
 
@@ -87,7 +88,8 @@ class DeleteAccountView(APIView):
         # Related account data uses Django's cascade rules where appropriate.
         user = request.user
         try:
-            user.delete()
+            with transaction.atomic():
+                user.delete()
         except ProtectedError:
             # Preserve order history, but remove the person's identifying data
             # and prevent any future login or public profile access.
@@ -111,7 +113,7 @@ class DeleteAccountView(APIView):
                 artist_profile.avatar = None
                 artist_profile.is_suspended = True
                 artist_profile.save(update_fields=["brand_name", "bio", "avatar", "is_suspended"])
-        return Response({"detail": "Account deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"detail": "Account deleted successfully."}, status=status.HTTP_200_OK)
 
 
 class NotificationListView(generics.ListAPIView):

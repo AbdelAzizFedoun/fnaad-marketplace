@@ -9,7 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
-import { changePassword, deleteAccount, resolveMediaUrl, updateProfile } from "../services/api";
+import { changePassword, resolveMediaUrl, updateProfile } from "../services/api";
 import { LANGUAGES, LanguageCode } from "../i18n/translations";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -83,22 +83,6 @@ export default function SettingsScreen() {
     finally { setSavingPassword(false); }
   };
 
-  const confirmDeleteAccount = () => Alert.alert(
-    "Delete account?",
-    "This permanently deletes your account, products, messages, and profile. This cannot be undone.",
-    [
-      { text: t("cancel") || "Cancel", style: "cancel" },
-      { text: "Delete permanently", style: "destructive", onPress: async () => {
-        try {
-          await deleteAccount();
-          await logout();
-        } catch (error: any) {
-          Alert.alert("Could not delete account", error?.response?.data?.detail || "Please try again.");
-        }
-      } },
-    ],
-  );
-
   return <View style={pageStyles.container}>
     <ScreenHeader title={t("settingsTitle")} />
     <ScrollView contentContainerStyle={pageStyles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
@@ -141,7 +125,7 @@ export default function SettingsScreen() {
 
       <Text style={[pageStyles.sectionTitle, { color: colors.text }]}>{t("supportAndLegal") || "Support and legal"}</Text>
       <LinkRow icon="document-text-outline" label={t("terms")} onPress={() => router.push("/terms")} colors={colors} />
-      <LinkRow icon="trash-outline" label="Delete my account" detail="Permanently delete your account and data" onPress={confirmDeleteAccount} colors={colors} danger />
+      <LinkRow icon="trash-outline" label="Delete my account" detail="Permanently delete your account and data" onPress={() => router.push("/delete-account")} colors={colors} danger />
       <LinkRow icon="log-out-outline" label={t("logout")} detail={t("signInAgain") || "You can sign in again at any time"} onPress={() => void logout()} colors={colors} danger />
     </ScrollView>
   </View>;

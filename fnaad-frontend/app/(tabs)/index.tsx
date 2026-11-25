@@ -259,11 +259,19 @@ export default function GalleryScreen() {
     void loadSpotlight();
   }, []);
 
-  useEffect(() => {
-    api.get("/catalog/stories/?page_size=100")
-      .then((response) => setStories(unwrapList<ArtistStory>(response.data)))
-      .catch((error) => console.warn("Unable to load Studio Stories:", error.message));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      api.get("/catalog/stories/?page_size=100")
+        .then((response) => {
+          if (isActive) setStories(unwrapList<ArtistStory>(response.data));
+        })
+        .catch((error) => console.warn("Unable to load Studio Stories:", error.message));
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     const storyId = Number(storyIdParam);

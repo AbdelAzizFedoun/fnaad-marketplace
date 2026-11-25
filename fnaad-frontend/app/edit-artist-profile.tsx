@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Image from "../components/MediaImage";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { useVideoPlayer, VideoView } from "expo-video";
 import {
   deleteStudioPhoto,
   getMyArtistProfile,
@@ -47,6 +49,11 @@ type StoryAnalyticsSummary = {
 type StudioMediaAsset = Pick<ImagePicker.ImagePickerAsset, "uri" | "fileName" | "mimeType" | "file" | "duration"> & {
   type: "image" | "video";
 };
+
+function StudioVideoPreview({ uri, style }: { uri: string; style: any }) {
+  const player = useVideoPlayer(uri, (videoPlayer) => { videoPlayer.loop = true; });
+  return <VideoView player={player} style={style} nativeControls contentFit="cover" />;
+}
 
 export default function EditArtistProfileScreen() {
   const { colors } = useTheme();
@@ -103,12 +110,23 @@ export default function EditArtistProfileScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    getMyStudioPhotos()
-      .then(({ data }) => setStudioPhotos(unwrapList<StudioMedia>(data)))
-      .catch(() => Alert.alert(t("couldNotAddStudioMedia"), t("reviewDetailsHint")))
-      .finally(() => setStudioLoading(false));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      setStudioLoading(true);
+      getMyStudioPhotos()
+        .then(({ data }) => {
+          if (isActive) setStudioPhotos(unwrapList<StudioMedia>(data));
+        })
+        .catch(() => Alert.alert(t("couldNotAddStudioMedia"), t("reviewDetailsHint")))
+        .finally(() => {
+          if (isActive) setStudioLoading(false);
+        });
+      return () => {
+        isActive = false;
+      };
+    }, [t])
+  );
 
   useEffect(() => {
     refreshStoryAnalytics();
@@ -335,7 +353,7 @@ export default function EditArtistProfileScreen() {
           {studioLoading ? <ActivityIndicator color={colors.accent} /> : studioPhotos.length ? studioPhotos.map((photo) => (
             <View key={photo.id} style={styles.studioPhotoCard}>
               {photo.media_type === "video" && photo.video
-                ? <View style={[styles.studioPhotoImage, styles.studioVideoPlaceholder]}><Ionicons name="videocam" size={26} color={colors.accent} /></View>
+                ? <StudioVideoPreview uri={resolveMediaUrl(photo.video)!} style={styles.studioPhotoImage} />
                 : photo.image ? <Image source={{ uri: resolveMediaUrl(photo.image)! }} style={styles.studioPhotoImage} /> : null}
               <View style={styles.studioPhotoDetails}>
                 <Text style={styles.studioPhotoCaption} numberOfLines={2}>

@@ -191,6 +191,7 @@ export default function AddProductScreen() {
             onChangeText={setDescription}
             multiline
           />
+          <Text style={styles.helper}>{t("followersNotificationHint") || "Add #followers to notify people who follow you when this artwork is published."}</Text>
         </View>
 
         <View style={styles.fieldGroup}><Text style={styles.label}>{t("creationEvidenceLabel")}</Text><Text style={styles.helper}>{t("creationEvidenceHint")}</Text><Pressable style={styles.evidencePicker} onPress={pickEvidence}><Ionicons name="document-attach-outline" size={22} color={colors.accent} /><Text style={styles.evidenceText}>{evidence.length ? `${evidence.length} ${t("evidenceSelected")}` : t("addEvidence")}</Text></Pressable></View>
