@@ -2605,7 +2605,7 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
         remoteStream={voiceCall.remoteStream}
         muted={voiceCall.muted}
         elapsedSeconds={voiceCall.elapsedSeconds}
-        error={Platform.OS === "web" && voiceCall.phase === "error" ? t("voiceCallMobileOnly") : voiceCall.error}
+        error={voiceCall.error}
         colors={colors}
         t={t}
         onAccept={() => void voiceCall.acceptCall()}
