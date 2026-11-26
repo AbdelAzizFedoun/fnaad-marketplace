@@ -218,7 +218,7 @@ export default function SignupScreen() {
           <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
           <TextInput
             style={styles.field}
-            placeholder="artist@example.com"
+            placeholder={isArtist ? "artist@gmail.com" : "client@gmail.com"}
             placeholderTextColor={colors.textMuted}
             value={email}
             onChangeText={setEmail}
@@ -236,7 +236,7 @@ export default function SignupScreen() {
 
         {/* International phone input. Mobile Money details are collected
             separately for artists; customers only need a reachable number. */}
-        <Text style={styles.label}>{isArtist ? `${t("phoneField")} / Mobile Money` : t("phoneField")}</Text>
+        <Text style={styles.label}>{t("phoneField") || "Phone number"}</Text>
         <View style={[styles.inputRow, phoneInvalid && styles.inputRowError]}>
           <Ionicons name="call-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
           <TextInput
