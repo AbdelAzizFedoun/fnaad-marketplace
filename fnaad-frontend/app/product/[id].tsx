@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable, FlatList, Modal, TextInput, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import Image from "../../components/MediaImage";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import { getProductDetail, getArtistProducts, resolveMediaUrl, startConversation, sendInquiry, getProductReviews, getFavoriteIds, toggleFavorite, getProductComments, createProductComment, unwrapList } from "../../services/api";
+import { getProductDetail, getArtistProducts, resolveMediaUrl, startConversation, sendMessage, sendInquiry, getProductReviews, getFavoriteIds, toggleFavorite, getProductComments, createProductComment, unwrapList } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -394,6 +394,32 @@ export default function ProductDetailScreen() {
     }
   };
 
+  const handlePriceRequest = async () => {
+    if (!product) return;
+    if (!loggedIn) {
+      router.push("/login");
+      return;
+    }
+    if (!isOnline) {
+      notifyOffline(t("offlineActionOrder") || "contact an artist");
+      return;
+    }
+    setStartingChat(true);
+    try {
+      const conversation = await startConversation(product.id);
+      await sendMessage(
+        conversation.data.id,
+        `Hello, I’m interested in “${product.title}”. Could we discuss the price and availability?`,
+      );
+      router.push(`/conversation/${conversation.data.id}`);
+    } catch (err: any) {
+      console.warn("Price request error:", err.response?.data || err.message);
+      setErrorMsg(t("chatStartError"));
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -530,7 +556,7 @@ export default function ProductDetailScreen() {
           {!isOwnProduct && !product.is_sold && (
             <>
               {product.price_xaf == null ? (
-                <Pressable style={styles.messageBtn} onPress={handleContact}>
+                <Pressable style={styles.messageBtn} onPress={handlePriceRequest} disabled={startingChat}>
                   <Text style={styles.messageBtnText}>Contact artist to discuss price</Text>
                 </Pressable>
               ) : (
