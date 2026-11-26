@@ -745,7 +745,7 @@ class VoiceCallStartView(drf_views.APIView):
         return Response(VoiceCallSerializer(call).data, status=status.HTTP_201_CREATED)
 
 
-class VoiceCallHistoryView(drf_views.ListAPIView):
+class VoiceCallHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = VoiceCallSerializer
 
