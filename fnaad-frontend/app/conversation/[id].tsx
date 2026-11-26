@@ -2610,6 +2610,7 @@ const handleStatusChange = async (status: "confirmed" | "cancelled" | "delivered
       <VoiceCallOverlay
         phase={voiceCall.phase}
         remoteName={isCustomer ? conversation?.artist_name || "" : conversation?.customer_username || ""}
+        remoteAvatar={isCustomer ? conversation?.artist_avatar : conversation?.contact?.customer.profile_photo}
         remoteStream={voiceCall.remoteStream}
         muted={voiceCall.muted}
         elapsedSeconds={voiceCall.elapsedSeconds}

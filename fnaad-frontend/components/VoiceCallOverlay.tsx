@@ -3,12 +3,14 @@ import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Vie
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VoiceCallAudio from "./VoiceCallAudio";
+import Image from "./MediaImage";
 
 type CallPhase = "idle" | "incoming" | "outgoing" | "connecting" | "connected" | "ended" | "error";
 
 type Props = {
   phase: CallPhase;
   remoteName: string;
+  remoteAvatar?: string | null;
   remoteStream: any;
   muted: boolean;
   elapsedSeconds: number;
@@ -31,6 +33,7 @@ function formatDuration(seconds: number) {
 export default function VoiceCallOverlay({
   phase,
   remoteName,
+  remoteAvatar,
   remoteStream,
   muted,
   elapsedSeconds,
@@ -124,7 +127,7 @@ export default function VoiceCallOverlay({
                     },
                   ]}
                 >
-                  <Ionicons name="person" size={avatarSize * 0.42} color={colors.accent} />
+                  {remoteAvatar ? <Image source={{ uri: remoteAvatar }} style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }} /> : <Ionicons name="person" size={avatarSize * 0.42} color={colors.accent} />}
                 </View>
               </Animated.View>
               <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
