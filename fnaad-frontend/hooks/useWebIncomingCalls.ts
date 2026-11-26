@@ -19,6 +19,9 @@ export function useWebIncomingCalls(isLoggedIn: boolean) {
           // Only the recipient should see the incoming browser notification.
           if (Notification.permission !== "granted") return;
           notifiedCalls.current.add(call.id);
+          // Bring the recipient directly to the incoming-call controls, just
+          // like a phone call, without requiring the Calls tab to be opened.
+          router.push({ pathname: "/conversation/[id]", params: { id: String(conversation.id), incomingCall: "1" } });
           const notification = new Notification("Incoming FNAAD call", {
             body: "Someone is calling you. Click to answer.",
             tag: `fnaad-call-${call.id}`,
