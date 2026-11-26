@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Alert, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Alert, RefreshControl, Image } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { getMyCommissionRequests, updateCommissionStatus, startCommissionConversation } from "../services/api";
+import { getMyCommissionRequests, updateCommissionStatus, startCommissionConversation, resolveMediaUrl } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import ScreenHeader from "../components/ScreenHeader";
@@ -22,6 +22,7 @@ type Commission = {
   id: number;
   title: string;
   description: string;
+  reference_image: string | null;
   category_display: string;
   budget_xaf: number | null;
   status: string;
@@ -132,6 +133,14 @@ export default function MyCommissionsScreen() {
                 </View>
               </View>
               <Text style={styles.cardCategory}>{item.category_display}</Text>
+              {item.reference_image ? (
+                <Image
+                  source={{ uri: resolveMediaUrl(item.reference_image)! }}
+                  style={styles.referenceImage}
+                  resizeMode="cover"
+                  accessibilityLabel="Reference image"
+                />
+              ) : null}
               <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
               {item.budget_xaf && <Text style={styles.cardBudget}>{t("budgetLabel")} {item.budget_xaf} XAF</Text>}
 
@@ -193,6 +202,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     statusText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
     cardCategory: { color: colors.accent, fontSize: 10, marginTop: 4, textTransform: "uppercase", fontWeight: "700" },
     cardDescription: { color: colors.textMuted, fontSize: 13, marginTop: 8, lineHeight: 19 },
+    referenceImage: { width: "100%", height: 190, borderRadius: 10, marginTop: 10, backgroundColor: colors.background },
     cardBudget: { color: colors.textMuted, fontSize: 12, marginTop: 6, fontWeight: "500" },
     responsesTitle: { color: colors.text, fontSize: 13, fontWeight: "700", marginTop: 14, marginBottom: 8 },
     responseCard: {

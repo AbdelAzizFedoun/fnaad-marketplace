@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, TextInput, Alert, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, TextInput, Alert, RefreshControl, Image } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { getOpenCommissionRequests, respondToCommission, unwrapList } from "../services/api";
+import { getOpenCommissionRequests, respondToCommission, unwrapList, resolveMediaUrl } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import ScreenHeader from "../components/ScreenHeader";
@@ -14,6 +14,7 @@ type Commission = {
   customer_username: string;
   title: string;
   description: string;
+  reference_image: string | null;
   category_display: string;
   budget_xaf: number | null;
   region_display: string | null;
@@ -110,6 +111,14 @@ export default function BrowseCommissionsScreen() {
                   <Text style={[styles.cardCategory, { color: colors.accent }]}>{item.category_display}</Text>
                 </View>
               </View>
+              {item.reference_image ? (
+                <Image
+                  source={{ uri: resolveMediaUrl(item.reference_image)! }}
+                  style={styles.referenceImage}
+                  resizeMode="cover"
+                  accessibilityLabel="Client reference image"
+                />
+              ) : null}
               <Text style={styles.cardDescription}>{item.description}</Text>
               <View style={styles.metaRow}>
                 {item.budget_xaf && <Text style={styles.metaText}>{t("budgetLabel")} {item.budget_xaf} XAF</Text>}
@@ -185,6 +194,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
     cardCategory: { fontSize: 10, marginTop: 2, textTransform: "uppercase", fontWeight: "700" },
     cardDescription: { color: colors.textMuted, fontSize: 13, marginTop: 10, lineHeight: 19 },
+    referenceImage: { width: "100%", height: 190, borderRadius: 10, marginTop: 12, backgroundColor: colors.background },
     metaRow: { flexDirection: "row", gap: 14, marginTop: 10, flexWrap: "wrap" },
     metaText: { color: colors.textMuted, fontSize: 12, fontWeight: "500" },
     responseCount: { color: colors.textMuted, fontSize: 11, marginTop: 8, fontStyle: "italic" },
