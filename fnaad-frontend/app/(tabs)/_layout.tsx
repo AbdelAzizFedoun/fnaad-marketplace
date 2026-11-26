@@ -6,7 +6,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
 import TabBarIcon from "../../components/TabBarIcon";
 import React, { useState, useCallback, useEffect } from "react";
-import { getNotifications, getUnreadMessageCount } from "../../services/api";
+import { getActiveVoiceCall, getMyConversations, getNotifications, getUnreadMessageCount } from "../../services/api";
 import { useFocusEffect } from "expo-router";
 import { subscribeAppDataRefresh } from "../../services/appRefresh";
 
@@ -20,6 +20,7 @@ export default function TabsLayout() {
   const tabHeight = 52 + bottomInset;
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [incomingCallCount, setIncomingCallCount] = useState(0);
 
   const loadUnreadCount = useCallback(() => {
     if (user) {
@@ -42,21 +43,37 @@ export default function TabsLayout() {
     }
   }, [user]);
 
+  const loadIncomingCallCount = useCallback(() => {
+    if (!user) {
+      setIncomingCallCount(0);
+      return;
+    }
+    getMyConversations()
+      .then(async (response) => {
+        const calls = await Promise.all(response.data.map((conversation: any) => getActiveVoiceCall(conversation.id).catch(() => ({ data: null }))));
+        setIncomingCallCount(calls.filter((call: any) => call.data?.status === "ringing" && call.data?.recipient === user.id).length);
+      })
+      .catch(() => undefined);
+  }, [user]);
+
   useEffect(() => subscribeAppDataRefresh(() => {
     loadUnreadCount();
     loadUnreadMessageCount();
-  }), [loadUnreadCount, loadUnreadMessageCount]);
+    loadIncomingCallCount();
+  }), [loadUnreadCount, loadUnreadMessageCount, loadIncomingCallCount]);
 
   useFocusEffect(
     useCallback(() => {
       loadUnreadCount();
       loadUnreadMessageCount();
+      loadIncomingCallCount();
       const interval = setInterval(() => {
         loadUnreadCount();
         loadUnreadMessageCount();
-      }, 30000);
+        loadIncomingCallCount();
+      }, 3000);
       return () => clearInterval(interval);
-    }, [loadUnreadCount, loadUnreadMessageCount])
+    }, [loadUnreadCount, loadUnreadMessageCount, loadIncomingCallCount])
   );
 
   return (
@@ -108,6 +125,7 @@ export default function TabsLayout() {
         name="calls"
         options={{
           title: "Calls",
+          tabBarBadge: incomingCallCount > 0 ? (incomingCallCount > 9 ? "9+" : String(incomingCallCount)) : undefined,
           tabBarIcon: ({ focused, color }) => (
             <TabBarIcon activeIcon="call" inactiveIcon="call-outline" focused={focused} color={color} />
           ),
