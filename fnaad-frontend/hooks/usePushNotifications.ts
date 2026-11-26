@@ -54,7 +54,7 @@ export function usePushNotifications(isLoggedIn: boolean) {
       if (!Notifications || !active) return;
 
       try {
-        await mod.setNotificationCategoryAsync("voice_call", [
+        await Notifications.setNotificationCategoryAsync("voice_call", [
           { identifier: "ANSWER_CALL", buttonTitle: "Answer", options: { opensAppToForeground: true } },
           { identifier: "DECLINE_CALL", buttonTitle: "Decline", options: { isDestructive: true } },
         ]);

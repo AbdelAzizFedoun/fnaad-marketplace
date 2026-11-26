@@ -6,10 +6,12 @@ import { LanguageProvider } from "../context/LanguageContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { NetworkProvider } from "../context/NetworkContext";
 import { usePushNotifications } from "../hooks/usePushNotifications";
+import { useWebIncomingCalls } from "../hooks/useWebIncomingCalls";
 
 function AppContent() {
   const { loggedIn } = useAuth();
   usePushNotifications(loggedIn);
+  useWebIncomingCalls(loggedIn);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }
