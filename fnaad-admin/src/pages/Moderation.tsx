@@ -32,6 +32,7 @@ export default function Moderation() {
   const [decidingId, setDecidingId] = useState<number | null>(null);
   const [flaggedCopies, setFlaggedCopies] = useState<any[]>([]);
   const [evidenceReviews, setEvidenceReviews] = useState<any[]>([]);
+  const [evidenceError, setEvidenceError] = useState("");
 
   const loadPending = () => {
     getPendingProducts()
@@ -96,12 +97,36 @@ export default function Moderation() {
     }
   };
 
+  const handleEvidenceDecision = async (item: any, approved: boolean) => {
+    const evidenceId = item.evidence?.[0]?.id;
+    if (!evidenceId) {
+      setEvidenceError("This review has no evidence file to decide.");
+      return;
+    }
+    setEvidenceError("");
+    try {
+      const response = await adminApi.decideEvidence(evidenceId, approved);
+      setEvidenceReviews((prev) => prev.map((entry) => entry.id === item.id
+        ? {
+            ...entry,
+            verification_level: response.data?.verification_level || entry.verification_level,
+            evidence: entry.evidence.map((e: any) => e.id === evidenceId
+              ? { ...e, is_reviewed: true, approved }
+              : e),
+          }
+        : entry));
+    } catch (err: any) {
+      console.error("Evidence decision error:", err.response?.data || err.message);
+      setEvidenceError(err.response?.data?.detail || "Could not save the evidence decision. Please try again.");
+    }
+  };
+
   return (
     <div>
       <h2 className="font-display text-2xl text-text mb-1">Moderation</h2>
       <p className="text-muted text-sm mb-6">Artworks pending review.</p>
 
-      {evidenceReviews.length > 0 && <section className="mb-8"><h3 className="font-display text-lg text-text mb-2">Originality evidence review</h3><div className="space-y-3">{evidenceReviews.map((item) => <div key={item.id} className="border border-border bg-surface rounded-lg p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-text font-semibold text-sm">{item.title}</p><p className="text-muted text-xs mt-1">{item.artist_name} · {item.creation_method} · {item.copy_strikes} copy strikes</p><p className="text-faint text-xs mt-1">Verification: {item.verification_level} · Passport: {String(item.passport_token).slice(0, 8)}</p>{item.copy_of_title && <p className="text-danger text-xs mt-1">Hash match: possible copy of “{item.copy_of_title}” by {item.copy_of_artist} ({Math.round((item.copy_confidence || 0) * 100)}%)</p>}</div><div className="flex gap-2">{item.evidence.map((e: any) => <a key={e.id} href={e.file} target="_blank" rel="noreferrer" className="text-gold-light text-xs underline">Open evidence</a>)}</div></div><div className="mt-3 flex gap-2"><button onClick={async () => { await adminApi.decideEvidence(item.evidence[0]?.id, true); setEvidenceReviews((prev) => prev.map((x) => x.id === item.id ? { ...x, verification_level: "verified" } : x)); }} className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2">Approve verification</button><button onClick={async () => { if (item.evidence[0]?.id) await adminApi.decideEvidence(item.evidence[0].id, false); }} className="border border-border text-muted text-xs font-bold rounded-md px-3 py-2">Keep unverified</button></div></div>)}</div></section>}
+      {evidenceReviews.length > 0 && <section className="mb-8"><h3 className="font-display text-lg text-text mb-2">Originality evidence review</h3>{evidenceError && <p className="text-danger text-sm mb-3">{evidenceError}</p>}<div className="space-y-3">{evidenceReviews.map((item) => <div key={item.id} className="border border-border bg-surface rounded-lg p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-text font-semibold text-sm">{item.title}</p><p className="text-muted text-xs mt-1">{item.artist_name} · {item.creation_method} · {item.copy_strikes} copy strikes</p><p className="text-faint text-xs mt-1">Verification: {item.verification_level} · Passport: {String(item.passport_token).slice(0, 8)}</p>{item.copy_of_title && <p className="text-danger text-xs mt-1">Hash match: possible copy of “{item.copy_of_title}” by {item.copy_of_artist} ({Math.round((item.copy_confidence || 0) * 100)}%)</p>}</div><div className="flex gap-2">{item.evidence.map((e: any) => <a key={e.id} href={e.file} target="_blank" rel="noreferrer" className="text-gold-light text-xs underline">Open evidence</a>)}</div></div><div className="mt-3 flex gap-2"><button onClick={() => void handleEvidenceDecision(item, true)} className="bg-success text-bg text-xs font-bold rounded-md px-3 py-2">Approve verification</button><button onClick={() => void handleEvidenceDecision(item, false)} className="border border-border text-muted text-xs font-bold rounded-md px-3 py-2">Keep unverified</button></div></div>)}</div></section>}
 
       {flaggedCopies.length > 0 && (
         <section className="mb-8">
