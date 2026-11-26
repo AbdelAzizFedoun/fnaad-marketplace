@@ -686,7 +686,8 @@ class VoiceCallSerializer(drf_serializers.ModelSerializer):
         return artist.brand_name if artist and artist.brand_name else user.username
 
     def get_other_user_avatar(self, obj):
-        return getattr(self._other_user(obj), "profile_photo", None)
+        photo = getattr(self._other_user(obj), "profile_photo", None)
+        return photo.url if photo and getattr(photo, "name", "") else None
 
     def get_direction(self, obj):
         request = self.context.get("request")
