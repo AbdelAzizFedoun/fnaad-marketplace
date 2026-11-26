@@ -684,10 +684,15 @@ class VoiceCallStartView(drf_views.APIView):
 
     def post(self, request, pk):
         with transaction.atomic():
-            conversation = get_object_or_404(
-                conversations_visible_to_user(request.user).select_for_update(),
+            # The visibility queryset uses DISTINCT because conversations can
+            # match through more than one artist relationship. PostgreSQL does
+            # not allow FOR UPDATE on a DISTINCT query, so authorize first and
+            # lock the single conversation in a second query.
+            visible_conversation = get_object_or_404(
+                conversations_visible_to_user(request.user),
                 pk=pk,
             )
+            conversation = Conversation.objects.select_for_update().get(pk=visible_conversation.pk)
             recipient = (
                 conversation_artist_profile(conversation).user
                 if conversation.customer_id == request.user.id
