@@ -743,6 +743,13 @@ class VoiceCallStartView(drf_views.APIView):
                 caller=request.user,
                 recipient=recipient,
             )
+        create_notification(
+            recipient,
+            "Incoming FNAAD voice call",
+            f"{request.user.username} is calling you.",
+            "voice_call",
+            {"call_id": call.id, "conversation_id": conversation.id},
+        )
         return Response(VoiceCallSerializer(call).data, status=status.HTTP_201_CREATED)
 
 

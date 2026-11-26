@@ -72,6 +72,14 @@ export function usePushNotifications(isLoggedIn: boolean) {
           console.log("[PushNotifications] Notification response/tap:", data);
           if (!data) return;
 
+          if (data.type === "voice_call" && data.conversation_id) {
+            router.push({
+              pathname: "/conversation/[id]",
+              params: { id: String(data.conversation_id), incomingCall: "1" },
+            });
+            return;
+          }
+
           // Conversation / Message navigation
           const convId = data.conversation_id || data.conversationId;
           if (convId) {
