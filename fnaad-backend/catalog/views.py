@@ -122,6 +122,7 @@ def conversations_visible_to_user(user):
     if artist_profile is not None:
         query |= models.Q(product__artist=artist_profile)
         query |= models.Q(commission_response__artist=artist_profile)
+        query |= models.Q(direct_artist=artist_profile)
 
     return Conversation.objects.filter(query, blocked_by__isnull=True).distinct()
 
@@ -135,7 +136,33 @@ def conversation_artist_profile(conversation):
     """
     if conversation.product_id is not None:
         return conversation.product.artist
+    if conversation.direct_artist_id is not None:
+        return conversation.direct_artist
     return conversation.commission_response.artist
+
+
+class ArtistCallSearchView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        search = (request.query_params.get("search") or "").strip()
+        if len(search) < 2:
+            return Response([])
+        artists = ArtistProfile.objects.filter(is_suspended=False).filter(
+            models.Q(brand_name__icontains=search) | models.Q(user__username__icontains=search)
+        ).select_related("user")[:20]
+        return Response([{"id": artist.id, "username": artist.user.username, "brand_name": artist.brand_name, "avatar": request.build_absolute_uri(artist.avatar.url) if artist.avatar else None} for artist in artists if artist.user_id != request.user.id])
+
+
+class StartArtistCallConversationView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        artist = get_object_or_404(ArtistProfile, pk=request.data.get("artist"), is_suspended=False)
+        if artist.user_id == request.user.id:
+            return Response({"detail": "You cannot call yourself."}, status=400)
+        conversation, created = Conversation.objects.get_or_create(direct_artist=artist, customer=request.user, defaults={"status": Conversation.STATUS_NEGOTIATING})
+        return Response({"id": conversation.id, "created": created}, status=201 if created else 200)
 
 
 def conversation_artist_id(conversation):

@@ -390,6 +390,8 @@ export const fetchNgrokMedia = async (uri: string, signal: AbortSignal): Promise
 
 export const startConversation = (productId: number) =>
   api.post("/catalog/conversations/start/", { product: productId });
+export const searchArtistsForCall = (search: string) => api.get<{ id: number; username: string; brand_name: string; avatar: string | null }[]>("/catalog/artists/call-search/", { params: { search } });
+export const startArtistCallConversation = (artist: number) => api.post<{ id: number }>("/catalog/conversations/start-artist-call/", { artist });
 
 export type VoiceCall = {
   id: number;

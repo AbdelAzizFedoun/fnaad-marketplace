@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View, TextInput } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getMyConversations, getVoiceCallHistory, resolveMediaUrl, type VoiceCall } from "../../services/api";
+import { getMyConversations, getVoiceCallHistory, resolveMediaUrl, searchArtistsForCall, startArtistCallConversation, type VoiceCall } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import Image from "../../components/MediaImage";
@@ -21,6 +21,7 @@ export default function CallsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [contacts, setContacts] = useState<{ id: number; name: string; avatar: string | null }[]>([]);
+  const [artistResults, setArtistResults] = useState<{ id: number; username: string; brand_name: string; avatar: string | null }[]>([]);
 
   const load = useCallback(() => {
     Promise.all([getVoiceCallHistory(), getMyConversations()]).then(([history, conversations]) => {
@@ -38,6 +39,15 @@ export default function CallsScreen() {
     setRefreshing(true);
     getVoiceCallHistory().then((response) => setCalls(response.data)).catch(() => undefined).finally(() => setRefreshing(false));
   }, []);
+  const searchArtist = useCallback((value: string) => {
+    setSearch(value);
+    if (value.trim().length >= 2) searchArtistsForCall(value.trim()).then((response) => setArtistResults(response.data)).catch(() => setArtistResults([]));
+    else setArtistResults([]);
+  }, []);
+  const callArtist = async (artistId: number) => {
+    const response = await startArtistCallConversation(artistId);
+    router.push(`/conversation/${response.data.id}?autoCall=1`);
+  };
 
   return <View style={styles.container}>
     <ScreenHeader title="Calls" />
@@ -47,8 +57,8 @@ export default function CallsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={{ padding: 16, flexGrow: 1 }}
       ListHeaderComponent={<>
-        <View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted} /><TextInput value={search} onChangeText={setSearch} placeholder="Search a username" placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
-        {search.trim() ? <View style={styles.searchResults}>{contacts.filter((contact) => contact.name.toLowerCase().includes(search.trim().toLowerCase())).map((contact) => <Pressable key={contact.id} style={styles.contact} onPress={() => router.push(`/conversation/${contact.id}?autoCall=1`)}><View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View><Text style={styles.name}>{contact.name}</Text><Ionicons name="call" size={20} color={colors.accent} /></Pressable>)}{!contacts.some((contact) => contact.name.toLowerCase().includes(search.trim().toLowerCase())) ? <Text style={styles.hint}>No matching FNAAD contact found.</Text> : null}</View> : <Text style={styles.section}>Recent calls</Text>}
+        <View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted} /><TextInput value={search} onChangeText={searchArtist} placeholder="Search an artist username" placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
+        {search.trim() ? <View style={styles.searchResults}>{artistResults.map((artist) => <Pressable key={artist.id} style={styles.contact} onPress={() => void callArtist(artist.id)}>{artist.avatar ? <Image source={{ uri: resolveMediaUrl(artist.avatar)! }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View>}<View style={styles.copy}><Text style={styles.name}>{artist.brand_name}</Text><Text style={styles.hint}>@{artist.username}</Text></View><Ionicons name="call" size={20} color={colors.accent} /></Pressable>)}{artistResults.length === 0 ? <Text style={styles.hint}>No matching artist found.</Text> : null}</View> : <Text style={styles.section}>Recent calls</Text>}
       </>}
       ListEmptyComponent={<View style={styles.empty}><Ionicons name="call-outline" size={42} color={colors.textMuted} /><Text style={styles.emptyText}>No calls yet</Text><Text style={styles.hint}>Your recent voice calls will appear here.</Text></View>}
       renderItem={({ item }) => {

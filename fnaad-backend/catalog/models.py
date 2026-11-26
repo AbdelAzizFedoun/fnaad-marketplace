@@ -199,6 +199,7 @@ class Conversation(models.Model):
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="conversations", null=True, blank=True)
     commission_response = models.ForeignKey("CommissionResponse", on_delete=models.CASCADE, related_name="conversations", null=True, blank=True)
+    direct_artist = models.ForeignKey("accounts.ArtistProfile", on_delete=models.CASCADE, related_name="direct_conversations", null=True, blank=True)
     customer = models.ForeignKey(
         "accounts.User", on_delete=models.CASCADE, related_name="conversations_as_customer"
     )
@@ -233,6 +234,8 @@ class Conversation(models.Model):
     def __str__(self):
         if self.product:
             return f"Conversation: {self.customer.username} ↔ {self.product.title} ({self.status})"
+        if self.direct_artist:
+            return f"Direct Conversation: {self.customer.username} ↔ {self.direct_artist.brand_name} ({self.status})"
         return f"Commission Conversation: {self.customer.username} ↔ {self.commission_response.artist.brand_name} ({self.status})"
 
 

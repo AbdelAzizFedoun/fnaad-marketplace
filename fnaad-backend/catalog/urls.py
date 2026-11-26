@@ -22,7 +22,7 @@ from .views import (
     product_public_view, SiteSettingsView,
     UnreadMessageCountView,
     ResumeCancelledConversationView, SpotlightListView, MySpotlightFeaturesView, CreateSpotlightRequestView, ArtistSpotlightApprovalView, AdminSpotlightFeaturesView, AdminSpotlightApprovalView,
-    VoiceCallStartView, VoiceCallHistoryView, ActiveVoiceCallView, VoiceCallStatusView, VoiceCallSignalsView,
+    VoiceCallStartView, VoiceCallHistoryView, ActiveVoiceCallView, VoiceCallStatusView, VoiceCallSignalsView, ArtistCallSearchView, StartArtistCallConversationView,
 )
 from .admin_views import FlaggedCopiesListView, ConfirmCopyView, OverruleCopyView, EvidenceReviewListView, EvidenceReviewDecisionView
 
@@ -44,6 +44,8 @@ urlpatterns = [
     path("images/<int:pk>/delete/", ProductImageDeleteView.as_view(), name="product-image-delete"),
     path("products/<int:pk>/edit/", ProductUpdateDeleteView.as_view(), name="product-edit"),
     path("conversations/start/", StartConversationView.as_view(), name="conversation-start"),
+    path("conversations/start-artist-call/", StartArtistCallConversationView.as_view(), name="conversation-start-artist-call"),
+    path("artists/call-search/", ArtistCallSearchView.as_view(), name="artist-call-search"),
     path("conversations/start-commission/", StartCommissionConversationView.as_view(), name="conversation-start-commission"),
     path("conversations/", MyConversationsListView.as_view(), name="conversation-list"),
     path("conversations/unread-count/", UnreadMessageCountView.as_view(), name="conversation-unread-count"),

@@ -217,6 +217,8 @@ class MessageSerializer(serializers.ModelSerializer):
         conversation = obj.conversation
         if conversation.product:
             artist_user = getattr(conversation.product.artist, "user", None)
+        elif conversation.direct_artist:
+            artist_user = getattr(conversation.direct_artist, "user", None)
         else:
             artist_user = conversation.commission_response.artist.user
 
@@ -267,13 +269,13 @@ class ConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            "id", "product", "product_title", "commission_response", "customer", "customer_username",
+            "id", "product", "direct_artist", "product_title", "commission_response", "customer", "customer_username",
             "artist_id", "artist_name", "artist_avatar", "artist_is_verified",
             "status", "unread", "other_user_online", "other_user_typing", "is_reported", "report_reason",
             "reported_at", "created_at", "messages", "pinned_message", "contact",
             "product_id", "product_price_xaf", "product_image",
         ]
-        read_only_fields = ["id", "customer", "customer_username", "product", "commission_response", "status", "created_at"]
+        read_only_fields = ["id", "customer", "customer_username", "product", "direct_artist", "commission_response", "status", "created_at"]
 
     def get_messages(self, obj):
         request = self.context.get("request")
@@ -297,11 +299,15 @@ class ConversationSerializer(serializers.ModelSerializer):
         # conversation list renders a blank title for these rows.
         if obj.commission_response:
             return obj.commission_response.commission.title
+        if obj.direct_artist:
+            return f"Direct call with {obj.direct_artist.brand_name}"
         return None
 
     def get_artist_id(self, obj):
         if obj.product:
             return obj.product.artist.id
+        if obj.direct_artist:
+            return obj.direct_artist.id
         return obj.commission_response.artist.id
 
     def get_product_id(self, obj):
@@ -324,10 +330,12 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_artist_name(self, obj):
         if obj.product:
             return obj.product.artist.brand_name
+        if obj.direct_artist:
+            return obj.direct_artist.brand_name
         return obj.commission_response.artist.brand_name
 
     def get_artist_avatar(self, obj):
-        artist = obj.product.artist if obj.product else obj.commission_response.artist
+        artist = obj.product.artist if obj.product else obj.direct_artist if obj.direct_artist else obj.commission_response.artist
         if not artist.avatar:
             return None
         # Must return a URL string. Returning the FieldFile itself makes DRF's
@@ -339,6 +347,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_artist_is_verified(self, obj):
         if obj.product:
             return obj.product.artist.is_verified
+        if obj.direct_artist:
+            return obj.direct_artist.is_verified
         return obj.commission_response.artist.is_verified
 
     def _absolute_url(self, file_field):
@@ -365,11 +375,11 @@ class ConversationSerializer(serializers.ModelSerializer):
 
         user = request.user
         customer = obj.customer
-        artist = obj.product.artist if obj.product else obj.commission_response.artist
+        artist = obj.product.artist if obj.product else obj.direct_artist if obj.direct_artist else obj.commission_response.artist
         viewer_is_customer = user.id == customer.id
 
         artist_can_reach_customer = Conversation.objects.filter(
-            Q(product__artist=artist) | Q(commission_response__artist=artist),
+            Q(product__artist=artist) | Q(commission_response__artist=artist) | Q(direct_artist=artist),
             customer=customer,
             status__in=[Conversation.STATUS_CONFIRMED, Conversation.STATUS_DELIVERED],
         ).exists()
@@ -434,7 +444,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             if obj.product:
                 other_user = obj.product.artist.user
             else:
-                other_user = obj.commission_response.artist.user
+                other_user = obj.direct_artist.user if obj.direct_artist else obj.commission_response.artist.user
 
         if other_user.last_seen is None:
             return False
@@ -454,6 +464,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     def _get_artist_id(self, obj):
         if obj.product:
             return obj.product.artist_id
+        if obj.direct_artist:
+            return obj.direct_artist_id
         return obj.commission_response.artist_id
 
     def get_read(self, obj):
