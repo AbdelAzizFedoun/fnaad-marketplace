@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, Vibration, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VoiceCallAudio from "./VoiceCallAudio";
@@ -60,6 +60,27 @@ export default function VoiceCallOverlay({
     animation.start();
     return () => animation.stop();
   }, [phase, pulse]);
+  useEffect(() => {
+    if (phase !== "incoming") return;
+    let audioContext: AudioContext | null = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const ring = () => {
+      Vibration.vibrate([0, 350, 250]);
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        try {
+          audioContext = new window.AudioContext();
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.frequency.value = 740;
+          gain.gain.value = 0.035;
+          oscillator.connect(gain); gain.connect(audioContext.destination);
+          oscillator.start(); oscillator.stop(audioContext.currentTime + 0.18);
+        } catch { /* Browser may require a prior user gesture for audio. */ }
+      }
+    };
+    ring(); timer = setInterval(ring, 1800);
+    return () => { if (timer) clearInterval(timer); Vibration.cancel(); void audioContext?.close(); };
+  }, [phase]);
   const title = phase === "incoming"
     ? t("voiceCallIncoming")
     : phase === "outgoing"
