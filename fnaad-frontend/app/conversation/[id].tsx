@@ -789,7 +789,7 @@ function TypingBubble({ colors }: { colors: any }) {
 }
 
 export default function ConversationScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, autoCall } = useLocalSearchParams();
   const { user } = useAuth();
   const { t } = useLanguage();
   const { colors } = useTheme();
@@ -856,6 +856,14 @@ export default function ConversationScreen() {
   const voiceStartXRef = useRef(0);
   const router = useRouter();
   const voiceCall = useVoiceCall(Number(id), user?.id);
+  const autoCallStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoCall !== "1" || autoCallStartedRef.current || !conversation || !user || !isOnline) return;
+    autoCallStartedRef.current = true;
+    const timer = setTimeout(() => void voiceCall.startCall(), 600);
+    return () => clearTimeout(timer);
+  }, [autoCall, conversation, user, isOnline, voiceCall.startCall]);
 
   useEffect(() => {
     if (!recorderState.isRecording) {

@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View, TextInput } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getVoiceCallHistory, resolveMediaUrl, type VoiceCall } from "../../services/api";
+import { getMyConversations, getVoiceCallHistory, resolveMediaUrl, type VoiceCall } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import Image from "../../components/MediaImage";
@@ -18,9 +18,19 @@ export default function CallsScreen() {
   const [calls, setCalls] = useState<VoiceCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [contacts, setContacts] = useState<{ id: number; name: string; avatar: string | null }[]>([]);
 
   const load = useCallback(() => {
-    getVoiceCallHistory().then((response) => setCalls(response.data)).catch(() => undefined).finally(() => setLoading(false));
+    Promise.all([getVoiceCallHistory(), getMyConversations()]).then(([history, conversations]) => {
+      setCalls(history.data);
+      const seen = new Set<number>();
+      setContacts(conversations.data.flatMap((item: any) => {
+        if (seen.has(item.id)) return [];
+        seen.add(item.id);
+        return [{ id: item.id, name: item.artist_name || item.customer_username || "FNAAD user", avatar: item.artist_avatar || null }];
+      }));
+    }).catch(() => undefined).finally(() => setLoading(false));
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const refresh = useCallback(() => {
@@ -35,6 +45,10 @@ export default function CallsScreen() {
       keyExtractor={(item) => String(item.id)}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+      ListHeaderComponent={<>
+        <View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted} /><TextInput value={search} onChangeText={setSearch} placeholder="Search a username" placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
+        {search.trim() ? <View style={styles.searchResults}>{contacts.filter((contact) => contact.name.toLowerCase().includes(search.trim().toLowerCase())).map((contact) => <Pressable key={contact.id} style={styles.contact} onPress={() => router.push(`/conversation/${contact.id}?autoCall=1`)}><View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View><Text style={styles.name}>{contact.name}</Text><Ionicons name="call" size={20} color={colors.accent} /></Pressable>)}{!contacts.some((contact) => contact.name.toLowerCase().includes(search.trim().toLowerCase())) ? <Text style={styles.hint}>No matching FNAAD contact found.</Text> : null}</View> : <Text style={styles.section}>Recent calls</Text>}
+      </>}
       ListEmptyComponent={<View style={styles.empty}><Ionicons name="call-outline" size={42} color={colors.textMuted} /><Text style={styles.emptyText}>No calls yet</Text><Text style={styles.hint}>Your recent voice calls will appear here.</Text></View>}
       renderItem={({ item }) => {
         const missed = item.status === "rejected" || item.status === "expired";
@@ -52,6 +66,8 @@ export default function CallsScreen() {
 function createStyles(colors: any) { return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: colors.border },
+  search: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, height: 44, marginBottom: 14 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14 }, searchResults: { marginBottom: 14 }, contact: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, section: { color: colors.text, fontWeight: "800", marginBottom: 4 },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.surface },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
   copy: { flex: 1 }, name: { color: colors.text, fontWeight: "700", fontSize: 14 },
