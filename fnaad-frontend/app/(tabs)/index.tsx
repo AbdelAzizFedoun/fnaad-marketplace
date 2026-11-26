@@ -24,7 +24,7 @@ type Product = {
   id: number;
   title: string;
   description: string | null;
-  price_xaf: number | null;
+  price_xaf: number;
   category_display: string;
   artist_id: number;
   artist_name: string;
@@ -176,24 +176,6 @@ export default function GalleryScreen() {
   const [storyActionError, setStoryActionError] = useState("");
   const recordedStoryViews = useRef(new Set<number>());
   const [countdownNow, setCountdownNow] = useState(Date.now());
-  const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
-
-  const rememberProduct = useCallback(async (product: Product) => {
-    const next = [product, ...recentlyViewed.filter((item) => item.id !== product.id)].slice(0, 8);
-    setRecentlyViewed(next);
-    try { await AsyncStorage.setItem("fnaad_recently_viewed_v1", JSON.stringify(next)); } catch {}
-  }, [recentlyViewed]);
-
-  const openProduct = useCallback((product: Product) => {
-    void rememberProduct(product);
-    router.push(`/product/${product.id}`);
-  }, [rememberProduct, router]);
-
-  useEffect(() => {
-    AsyncStorage.getItem("fnaad_recently_viewed_v1").then((raw) => {
-      if (raw) setRecentlyViewed(JSON.parse(raw) as Product[]);
-    }).catch(() => undefined);
-  }, []);
 
   const activeFilterCount = [selectedRegion, selectedCategory, selectedSort !== "newest"].filter(Boolean).length;
   const storiesByArtist = new Map<number, ArtistStory[]>();
@@ -926,23 +908,6 @@ export default function GalleryScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
             ListHeaderComponent={
               <View style={styles.discoveryHeader}>
-                {!debouncedSearch && recentlyViewed.length > 0 && (
-                  <View style={{ marginBottom: 18 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
-                      <Text style={styles.sectionTitle}>Recently viewed</Text>
-                      <Text style={{ color: colors.textMuted, fontSize: 11 }}>Just for you</Text>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                      {recentlyViewed.map((item) => {
-                        const image = item.images?.find((entry) => entry.is_primary) || item.images?.[0];
-                        return <Pressable key={item.id} onPress={() => openProduct(item)} style={{ width: 145, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surface }}>
-                          {image?.image ? <Image source={{ uri: resolveMediaUrl(image.image)! }} style={{ width: 145, height: 100 }} resizeMode="cover" /> : <View style={{ width: 145, height: 100, backgroundColor: colors.border }} />}
-                          <View style={{ padding: 8 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>{item.title}</Text><Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 3 }}>{item.price_xaf != null ? `${formatPrice(item.price_xaf)} XAF` : "Price on request"}</Text></View>
-                        </Pressable>;
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
                 {/* ── Become an Artist Invitation Banner (for visitors) ── */}
                 {!loggedIn && (
                   <View style={styles.artistInviteBanner}>
@@ -1087,7 +1052,7 @@ export default function GalleryScreen() {
                         ) : null}
                         <Pressable
                           style={styles.heroButton}
-                          onPress={() => openProduct(dailyDiscovery)}
+                          onPress={() => router.push(`/product/${dailyDiscovery.id}`)}
                           accessibilityRole="button"
                         >
                           <Text style={styles.heroButtonText}>{t("viewArtwork")}</Text>
@@ -1154,7 +1119,7 @@ export default function GalleryScreen() {
               const isFavorited = favoriteIds.has(item.id);
 
               return (
-                <Pressable style={styles.card} onPress={() => openProduct(item)}>
+                <Pressable style={styles.card} onPress={() => router.push(`/product/${item.id}`)}>
                   <View style={styles.cardImageWrap}>
                     {imageUrl ? (
                       <Image source={{ uri: imageUrl }} style={styles.cardImage} resizeMode="contain" />
