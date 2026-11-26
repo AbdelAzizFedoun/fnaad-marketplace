@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, Vibration, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VoiceCallAudio from "./VoiceCallAudio";
 import Image from "./MediaImage";
+import { setAudioModeAsync } from "expo-audio";
 
 type CallPhase = "idle" | "incoming" | "outgoing" | "connecting" | "connected" | "ended" | "error";
 
@@ -53,6 +54,7 @@ export default function VoiceCallOverlay({
   const avatarSize = Math.min(132, Math.max(92, width * 0.32));
   const actionSize = Math.min(68, Math.max(58, width * 0.17));
   const actionGap = Math.min(44, width * 0.12);
+  const [speaker, setSpeaker] = useState(true);
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (phase !== "incoming" && phase !== "outgoing") { pulse.stopAnimation(); pulse.setValue(1); return; }
@@ -84,6 +86,10 @@ export default function VoiceCallOverlay({
     ring(); timer = setInterval(ring, 1800);
     return () => { if (timer) clearInterval(timer); Vibration.cancel(); void audioContext?.close(); };
   }, [phase]);
+  useEffect(() => {
+    if (phase !== "connected" && phase !== "connecting") return;
+    void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", allowsRecording: true, shouldRouteThroughEarpiece: !speaker }).catch(() => undefined);
+  }, [phase, speaker]);
   const title = phase === "incoming"
     ? t("voiceCallIncoming")
     : phase === "outgoing"
@@ -162,15 +168,10 @@ export default function VoiceCallOverlay({
               ) : (
                 <>
                   {(phase === "connected" || phase === "connecting") && (
-                    <CallButton
-                      icon={muted ? "mic-off" : "mic"}
-                      label={muted ? t("voiceCallUnmute") : t("voiceCallMute")}
-                      color={colors.surface}
-                      iconColor={colors.text}
-                      size={actionSize}
-                      textColor={colors.text}
-                      onPress={onToggleMute}
-                    />
+                    <>
+                      <CallButton icon={muted ? "mic-off" : "mic"} label={muted ? t("voiceCallUnmute") : t("voiceCallMute")} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={onToggleMute} />
+                      <CallButton icon={speaker ? "volume-high" : "volume-mute"} label={speaker ? "Haut-parleur" : "Écouteur"} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={() => setSpeaker((value) => !value)} />
+                    </>
                   )}
                   <CallButton icon="call" label={t("voiceCallEnd")} color="#B0524F" size={actionSize} textColor={colors.text} onPress={onEnd} />
                 </>
@@ -192,7 +193,7 @@ function CallButton({
   textColor,
   onPress,
 }: {
-  icon: "close" | "call" | "mic" | "mic-off";
+  icon: "close" | "call" | "mic" | "mic-off" | "volume-high" | "volume-mute";
   label: string;
   color: string;
   iconColor?: string;
