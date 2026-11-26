@@ -1,7 +1,15 @@
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { getActiveVoiceCall, getMyConversations } from "../services/api";
+import { getActiveVoiceCall, getMyConversations, registerWebPushSubscription } from "../services/api";
+
+const VAPID_PUBLIC_KEY = process.env.EXPO_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY || "";
+
+function toUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const raw = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
+}
 
 export function useWebIncomingCalls(isLoggedIn: boolean) {
   const router = useRouter();
@@ -10,6 +18,14 @@ export function useWebIncomingCalls(isLoggedIn: boolean) {
   useEffect(() => {
     if (Platform.OS !== "web" || !isLoggedIn || typeof window === "undefined" || !("Notification" in window)) return;
     let active = true;
+    if (VAPID_PUBLIC_KEY && "serviceWorker" in navigator && "PushManager" in window) {
+      void navigator.serviceWorker.register("/sw.js").then(async (registration) => {
+        if (Notification.permission === "default") await Notification.requestPermission();
+        if (Notification.permission !== "granted") return;
+        const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toUint8Array(VAPID_PUBLIC_KEY) });
+        await registerWebPushSubscription(subscription.toJSON());
+      }).catch(() => undefined);
+    }
     const poll = async () => {
       try {
         const conversations = (await getMyConversations()).data as { id: number }[];

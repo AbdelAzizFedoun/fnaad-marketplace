@@ -726,6 +726,8 @@ export const updateProfile = async (data: {
 
 export const registerPushToken = (token: string) =>
   api.post("/accounts/push-token/", { expo_push_token: token });
+export const registerWebPushSubscription = (subscription: PushSubscriptionJSON) =>
+  api.post("/accounts/web-push/", { subscription });
 
 export const getNotifications = () => api.get("/accounts/notifications/");
 export const markNotificationsRead = () => api.post("/accounts/notifications/read/");

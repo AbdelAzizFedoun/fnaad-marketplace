@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
-from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer
+from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer, WebPushSubscriptionSerializer
 from .serializers import ChangePasswordSerializer, UpdateProfileSerializer
 from .models import User, ArtistProfile, PasswordResetCode
 from .serializers import RegisterSerializer, MeSerializer, PushTokenSerializer, ChangePasswordSerializer, UpdateProfileSerializer, RequestPasswordResetSerializer, ConfirmPasswordResetSerializer, NotificationSerializer, PublicUserProfileSerializer
@@ -61,6 +61,17 @@ class RegisterPushTokenView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Token registered."}, status=status.HTTP_200_OK)
+
+
+class RegisterWebPushView(generics.GenericAPIView):
+    serializer_class = WebPushSubscriptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Web push subscription registered."}, status=status.HTTP_200_OK)
     
 class ChangePasswordView(generics.GenericAPIView):
     serializer_class = ChangePasswordSerializer

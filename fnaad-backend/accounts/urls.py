@@ -1,12 +1,13 @@
 from django.urls import path
 from .views import RegisterView, MeView, RegisterPushTokenView, ChangePasswordView, UpdateProfileView, DeleteAccountView
-from .views import RegisterView, MeView, RegisterPushTokenView, ChangePasswordView, UpdateProfileView, RequestPasswordResetView, ConfirmPasswordResetView, NotificationListView, MarkNotificationReadView, MarkNotificationsReadView, DeleteNotificationView, ClearNotificationsView, FollowerProfileView
+from .views import RegisterView, MeView, RegisterPushTokenView, RegisterWebPushView, ChangePasswordView, UpdateProfileView, RequestPasswordResetView, ConfirmPasswordResetView, NotificationListView, MarkNotificationReadView, MarkNotificationsReadView, DeleteNotificationView, ClearNotificationsView, FollowerProfileView
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="register"),
     path("me/", MeView.as_view(), name="me"),
     path("followers/<int:pk>/profile/", FollowerProfileView.as_view(), name="follower-profile"),
     path("push-token/", RegisterPushTokenView.as_view(), name="register-push-token"),
+    path("web-push/", RegisterWebPushView.as_view(), name="register-web-push"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("update-profile/", UpdateProfileView.as_view(), name="update-profile"),
     path("delete-account/", DeleteAccountView.as_view(), name="delete-account"),

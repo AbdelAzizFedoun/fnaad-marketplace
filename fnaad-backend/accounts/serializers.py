@@ -110,6 +110,16 @@ class PushTokenSerializer(serializers.Serializer):
         return user
 
 
+class WebPushSubscriptionSerializer(serializers.Serializer):
+    subscription = serializers.JSONField()
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        user.web_push_subscription = self.validated_data["subscription"]
+        user.save(update_fields=["web_push_subscription"])
+        return user
+
+
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification

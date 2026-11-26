@@ -53,6 +53,7 @@ class User(AbstractUser):
     date_joined_platform = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(null=True, blank=True)
     expo_push_token = models.CharField(max_length=255, blank=True, null=True)
+    web_push_subscription = models.JSONField(default=dict, blank=True)
 
     objects = UserManager()
 
