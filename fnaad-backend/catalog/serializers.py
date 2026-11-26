@@ -89,6 +89,10 @@ class ProductImageSerializer(serializers.ModelSerializer):
         return data
 
 class ProductSerializer(serializers.ModelSerializer):
+    # A listed price is optional; when omitted the buyer negotiates with the
+    # artist in chat. Keep this explicit so API validation matches the
+    # nullable database column on every deployment.
+    price_xaf = serializers.IntegerField(required=False, allow_null=True, min_value=500)
     images = ProductImageSerializer(many=True, read_only=True)
     artist_name = serializers.CharField(source="artist.brand_name", read_only=True)
     artist_phone = serializers.CharField(source="artist.user.phone_number", read_only=True)
