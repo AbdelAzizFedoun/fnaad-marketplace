@@ -4,6 +4,7 @@ import Constants, { ExecutionEnvironment } from "expo-constants";
 import { useRouter } from "expo-router";
 import { Platform } from "react-native";
 import { registerPushToken } from "../services/api";
+import { updateVoiceCallStatus } from "../services/api";
 
 type NotificationsModule = typeof import("expo-notifications");
 
@@ -53,6 +54,10 @@ export function usePushNotifications(isLoggedIn: boolean) {
       if (!Notifications || !active) return;
 
       try {
+        await mod.setNotificationCategoryAsync("voice_call", [
+          { identifier: "ANSWER_CALL", buttonTitle: "Answer", options: { opensAppToForeground: true } },
+          { identifier: "DECLINE_CALL", buttonTitle: "Decline", options: { isDestructive: true } },
+        ]);
         const token = await registerForPushNotificationsAsync(Notifications);
         if (token && active) {
           console.log("[PushNotifications] Registered push token:", token);
@@ -73,6 +78,10 @@ export function usePushNotifications(isLoggedIn: boolean) {
           if (!data) return;
 
           if (data.type === "voice_call" && data.conversation_id) {
+            if (response.actionIdentifier === "DECLINE_CALL" && data.call_id) {
+              void updateVoiceCallStatus(Number(data.call_id), "rejected");
+              return;
+            }
             router.push({
               pathname: "/conversation/[id]",
               params: { id: String(data.conversation_id), incomingCall: "1" },

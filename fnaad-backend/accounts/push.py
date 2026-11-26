@@ -26,6 +26,8 @@ def send_push_notification(token, title, body, data=None):
         "_displayInForeground": True,
         "data": data or {},
     }
+    if data and data.get("type") == "voice_call":
+        payload["categoryId"] = "voice_call"
 
     try:
         print(f"[push] posting to {EXPO_PUSH_URL} with title='{title}'")
