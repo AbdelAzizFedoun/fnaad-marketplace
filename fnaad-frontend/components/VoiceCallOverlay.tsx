@@ -170,7 +170,7 @@ export default function VoiceCallOverlay({
                   {(phase === "connected" || phase === "connecting") && (
                     <>
                       <CallButton icon={muted ? "mic-off" : "mic"} label={muted ? t("voiceCallUnmute") : t("voiceCallMute")} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={onToggleMute} />
-                      <CallButton icon={speaker ? "volume-high" : "volume-mute"} label={speaker ? "Haut-parleur" : "Écouteur"} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={() => setSpeaker((value) => !value)} />
+                      <CallButton icon={speaker ? "volume-high" : "volume-mute"} label={speaker ? t("voiceCallSpeaker") : t("voiceCallEarpiece")} color={colors.surface} iconColor={colors.text} size={actionSize} textColor={colors.text} onPress={() => setSpeaker((value) => !value)} />
                     </>
                   )}
                   <CallButton icon="call" label={t("voiceCallEnd")} color="#B0524F" size={actionSize} textColor={colors.text} onPress={onEnd} />

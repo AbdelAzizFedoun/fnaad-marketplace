@@ -3,7 +3,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../context/AuthContext";
-import { LanguageProvider } from "../context/LanguageContext";
+import { LanguageProvider, useLanguage } from "../context/LanguageContext";
 import { ThemeProvider } from "../context/ThemeContext";
 import { NetworkProvider, useNetwork } from "../context/NetworkContext";
 import { usePushNotifications } from "../hooks/usePushNotifications";
@@ -12,14 +12,15 @@ import { useWebIncomingCalls } from "../hooks/useWebIncomingCalls";
 function AppContent() {
   const { loggedIn } = useAuth();
   const { isOffline, checkConnection } = useNetwork();
+  const { t } = useLanguage();
   usePushNotifications(loggedIn);
   useWebIncomingCalls(loggedIn);
 
   return <View style={styles.root}>
     <Stack screenOptions={{ headerShown: false }} />
-    {isOffline ? <Pressable style={styles.offlineBanner} onPress={() => void checkConnection()} accessibilityRole="button" accessibilityLabel="Retry connection">
-      <Text style={styles.offlineText}>Connexion instable — appuyez pour réessayer</Text>
-      <Text style={styles.retryText}>Réessayer</Text>
+    {isOffline ? <Pressable style={styles.offlineBanner} onPress={() => void checkConnection()} accessibilityRole="button" accessibilityLabel={t("retry")}>
+      <Text style={styles.offlineText}>{t("unstableConnection")}</Text>
+      <Text style={styles.retryText}>{t("retry")}</Text>
     </Pressable> : null}
   </View>;
 }

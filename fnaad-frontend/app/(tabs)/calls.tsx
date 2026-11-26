@@ -4,6 +4,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getMyConversations, getVoiceCallHistory, resolveMediaUrl, searchArtistsForCall, startArtistCallConversation, type VoiceCall } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
+import { useLanguage } from "../../context/LanguageContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import Image from "../../components/MediaImage";
 
@@ -15,6 +16,7 @@ const formatDuration = (seconds?: number | null) => seconds == null ? "" : `${Ma
 export default function CallsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const styles = createStyles(colors);
   const [calls, setCalls] = useState<VoiceCall[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,16 +59,16 @@ export default function CallsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
       contentContainerStyle={{ padding: 16, flexGrow: 1 }}
       ListHeaderComponent={<>
-        <View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted} /><TextInput value={search} onChangeText={searchArtist} placeholder="Search an artist username" placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
-        {search.trim() ? <View style={styles.searchResults}>{artistResults.map((artist) => <Pressable key={artist.id} style={styles.contact} onPress={() => void callArtist(artist.id)}>{artist.avatar ? <Image source={{ uri: resolveMediaUrl(artist.avatar)! }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View>}<View style={styles.copy}><Text style={styles.name}>{artist.brand_name}</Text><Text style={styles.hint}>@{artist.username}</Text></View><Ionicons name="call" size={20} color={colors.accent} /></Pressable>)}{artistResults.length === 0 ? <Text style={styles.hint}>No matching artist found.</Text> : null}</View> : <Text style={styles.section}>Recent calls</Text>}
+        <View style={styles.search}><Ionicons name="search-outline" size={18} color={colors.textMuted} /><TextInput value={search} onChangeText={searchArtist} placeholder={t("callSearchPlaceholder")} placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
+        {search.trim() ? <View style={styles.searchResults}>{artistResults.map((artist) => <Pressable key={artist.id} style={styles.contact} onPress={() => void callArtist(artist.id)}>{artist.avatar ? <Image source={{ uri: resolveMediaUrl(artist.avatar)! }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View>}<View style={styles.copy}><Text style={styles.name}>{artist.brand_name}</Text><Text style={styles.hint}>@{artist.username}</Text></View><Ionicons name="call" size={20} color={colors.accent} /></Pressable>)}{artistResults.length === 0 ? <Text style={styles.hint}>{t("noMatchingArtist")}</Text> : null}</View> : <Text style={styles.section}>{t("recentCalls")}</Text>}
       </>}
-      ListEmptyComponent={<View style={styles.empty}><Ionicons name="call-outline" size={42} color={colors.textMuted} /><Text style={styles.emptyText}>No calls yet</Text><Text style={styles.hint}>Your recent voice calls will appear here.</Text></View>}
+      ListEmptyComponent={<View style={styles.empty}><Ionicons name="call-outline" size={42} color={colors.textMuted} /><Text style={styles.emptyText}>{t("noCallsYet")}</Text><Text style={styles.hint}>{t("recentCalls")}</Text></View>}
       renderItem={({ item }) => {
         const missed = item.status === "rejected" || item.status === "expired";
         const color = missed ? "#B0524F" : colors.accent;
         return <Pressable style={styles.row} onPress={() => router.push(`/conversation/${item.conversation}`)}>
           {item.other_user_avatar ? <Image source={{ uri: resolveMediaUrl(item.other_user_avatar)! }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View>}
-          <View style={styles.copy}><Text style={styles.name}>{item.other_user_name || "FNAAD user"}</Text><View style={styles.meta}><Ionicons name={item.direction === "outgoing" ? "arrow-up" : "arrow-down"} size={15} color={color} /><Text style={[styles.status, { color }]}>{missed ? "Missed" : item.direction === "outgoing" ? "Outgoing" : "Incoming"}</Text><Text style={styles.date}>{formatDate(item.created_at)}{formatDuration(item.duration_seconds) ? ` · ${formatDuration(item.duration_seconds)}` : ""}</Text></View></View>
+          <View style={styles.copy}><Text style={styles.name}>{item.other_user_name || "FNAAD user"}</Text><View style={styles.meta}><Ionicons name={item.direction === "outgoing" ? "arrow-up" : "arrow-down"} size={15} color={color} /><Text style={[styles.status, { color }]}>{missed ? t("missedCall") : item.direction === "outgoing" ? t("outgoingCall") : t("incomingCall")}</Text><Text style={styles.date}>{formatDate(item.created_at)}{formatDuration(item.duration_seconds) ? ` · ${formatDuration(item.duration_seconds)}` : ""}</Text></View></View>
           <Pressable onPress={() => router.push(`/conversation/${item.conversation}?autoCall=1`)} hitSlop={10} accessibilityLabel="Call back"><Ionicons name="call-outline" size={21} color={colors.accent} /></Pressable>
         </Pressable>;
       }}
