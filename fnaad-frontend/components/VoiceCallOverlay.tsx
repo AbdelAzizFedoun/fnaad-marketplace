@@ -2,7 +2,6 @@ import React from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { MediaStream } from "react-native-webrtc";
 import VoiceCallAudio from "./VoiceCallAudio";
 
 type CallPhase = "idle" | "incoming" | "outgoing" | "connecting" | "connected" | "ended" | "error";
@@ -10,7 +9,7 @@ type CallPhase = "idle" | "incoming" | "outgoing" | "connecting" | "connected" |
 type Props = {
   phase: CallPhase;
   remoteName: string;
-  remoteStream: MediaStream | null;
+  remoteStream: any;
   muted: boolean;
   elapsedSeconds: number;
   error: string;
