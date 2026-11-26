@@ -234,13 +234,14 @@ export default function SignupScreen() {
           </Text>
         ) : null}
 
-        {/* Mobile Money Phone Input */}
-        <Text style={styles.label}>{t("phoneField")}</Text>
+        {/* International phone input. Mobile Money details are collected
+            separately for artists; customers only need a reachable number. */}
+        <Text style={styles.label}>{isArtist ? `${t("phoneField")} / Mobile Money` : t("phoneField")}</Text>
         <View style={[styles.inputRow, phoneInvalid && styles.inputRowError]}>
           <Ionicons name="call-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
           <TextInput
             style={styles.field}
-            placeholder="6XXXXXXXX (Orange / MTN)"
+            placeholder={isArtist ? "+237 6XXXXXXXX (Orange / MTN)" : "+1 555 123 4567 or +33 6 12 34 56 78"}
             placeholderTextColor={colors.textMuted}
             value={phone}
             onChangeText={setPhone}
@@ -249,6 +250,11 @@ export default function SignupScreen() {
             accessibilityLabel={t("phoneField")}
           />
         </View>
+        <Text style={styles.sectionHint}>
+          {isArtist
+            ? "Use your Cameroon phone/Mobile Money number with country code (+237)."
+            : "Use your international phone number with country code, for example +237, +33, +1, +44, or +234."}
+        </Text>
         {phoneInvalid ? <Text style={styles.inlineError}>{t("requiredField")}</Text> : null}
 
         {/* Password Input */}
@@ -359,7 +365,7 @@ export default function SignupScreen() {
                 onPress={() => setGender(val)}
               >
                 <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                  {t(`gender_${val}`) || val}
+                  {val === "male" ? "Male" : val === "female" ? "Female" : "Prefer not to say"}
                 </Text>
               </Pressable>
             );
