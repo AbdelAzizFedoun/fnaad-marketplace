@@ -1,5 +1,5 @@
-import React from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VoiceCallAudio from "./VoiceCallAudio";
@@ -50,6 +50,16 @@ export default function VoiceCallOverlay({
   const avatarSize = Math.min(132, Math.max(92, width * 0.32));
   const actionSize = Math.min(68, Math.max(58, width * 0.17));
   const actionGap = Math.min(44, width * 0.12);
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (phase !== "incoming" && phase !== "outgoing") { pulse.stopAnimation(); pulse.setValue(1); return; }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.12, duration: 850, useNativeDriver: Platform.OS !== "web" }),
+      Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: Platform.OS !== "web" }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [phase, pulse]);
   const title = phase === "incoming"
     ? t("voiceCallIncoming")
     : phase === "outgoing"
@@ -71,8 +81,8 @@ export default function VoiceCallOverlay({
         <SafeAreaView style={styles.safeArea}>
           <ScrollView contentContainerStyle={styles.content} bounces={false}>
             <View style={styles.identity}>
-              <View
-                style={[
+              <Animated.View
+                style={[{ transform: [{ scale: pulse }] },
                   styles.avatarHalo,
                   {
                     width: avatarSize + 24,
@@ -95,7 +105,7 @@ export default function VoiceCallOverlay({
                 >
                   <Ionicons name="person" size={avatarSize * 0.42} color={colors.accent} />
                 </View>
-              </View>
+              </Animated.View>
               <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
                 {remoteName}
               </Text>
