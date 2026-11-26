@@ -248,7 +248,7 @@ export default function Moderation() {
                     {[product.category_display, product.artist_region_display].filter(Boolean).join(" · ") || "Category or region not provided"}
                   </p>
                   <p className="text-faint text-xs mt-2 whitespace-pre-wrap">{product.description || "No description provided."}</p>
-                  <p className="text-gold-light text-sm font-semibold mt-2">{product.price_xaf.toLocaleString()} XAF</p>
+                  <p className="text-gold-light text-sm font-semibold mt-2">{product.price_xaf != null ? `${product.price_xaf.toLocaleString()} XAF` : "Price on request"}</p>
                   {product.created_at && (
                     <p className="text-faint text-xs mt-1">
                       Submitted {new Date(product.created_at).toLocaleString()}

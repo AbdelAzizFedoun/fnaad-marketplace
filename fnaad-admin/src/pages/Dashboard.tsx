@@ -349,7 +349,7 @@ export default function Dashboard() {
                       {product.description || "No description provided."}
                     </p>
                     <p className="text-gold-light text-sm font-semibold mt-2">
-                      {product.price_xaf.toLocaleString()} XAF
+                      {product.price_xaf != null ? `${product.price_xaf.toLocaleString()} XAF` : "Price on request"}
                     </p>
                     {product.created_at && (
                       <p className="text-faint text-xs mt-1">
