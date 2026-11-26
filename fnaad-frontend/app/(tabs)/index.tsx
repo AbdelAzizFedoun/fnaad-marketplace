@@ -227,21 +227,6 @@ export default function GalleryScreen() {
     : productsWithImages.length
       ? productsWithImages
       : newestProducts;
-  const recommendationSignals = [...recentlyViewed, ...products.filter((item) => favoriteIds.has(item.id))];
-  const preferredCategories = new Set(recommendationSignals.map((item) => item.category_display).filter(Boolean));
-  const preferredArtists = new Set(recommendationSignals.map((item) => item.artist_id));
-  const recommendedProducts = products
-    .filter((item) => !recommendationSignals.some((signal) => signal.id === item.id))
-    .map((item) => ({
-      item,
-      score: (preferredCategories.has(item.category_display) ? 3 : 0)
-        + (preferredArtists.has(item.artist_id) ? 4 : 0)
-        + (item.artist_is_verified ? 1 : 0),
-    }))
-    .filter(({ score }) => score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 8)
-    .map(({ item }) => item);
   const dailyDiscovery = discoveryPool.length
     ? discoveryPool[((dayNumber % discoveryPool.length) + discoveryPool.length) % discoveryPool.length]
     : null;
@@ -949,23 +934,6 @@ export default function GalleryScreen() {
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                       {recentlyViewed.map((item) => {
-                        const image = item.images?.find((entry) => entry.is_primary) || item.images?.[0];
-                        return <Pressable key={item.id} onPress={() => openProduct(item)} style={{ width: 145, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surface }}>
-                          {image?.image ? <Image source={{ uri: resolveMediaUrl(image.image)! }} style={{ width: 145, height: 100 }} resizeMode="cover" /> : <View style={{ width: 145, height: 100, backgroundColor: colors.border }} />}
-                          <View style={{ padding: 8 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>{item.title}</Text><Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 3 }}>{item.price_xaf != null ? `${formatPrice(item.price_xaf)} XAF` : "Price on request"}</Text></View>
-                        </Pressable>;
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-                {!debouncedSearch && recommendedProducts.length > 0 && (
-                  <View style={{ marginBottom: 18 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
-                      <Text style={styles.sectionTitle}>Recommended for you</Text>
-                      <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                      {recommendedProducts.map((item) => {
                         const image = item.images?.find((entry) => entry.is_primary) || item.images?.[0];
                         return <Pressable key={item.id} onPress={() => openProduct(item)} style={{ width: 145, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surface }}>
                           {image?.image ? <Image source={{ uri: resolveMediaUrl(image.image)! }} style={{ width: 145, height: 100 }} resizeMode="cover" /> : <View style={{ width: 145, height: 100, backgroundColor: colors.border }} />}
