@@ -1949,6 +1949,7 @@ class CreateCommissionRequestView(generics.CreateAPIView):
     """
     serializer_class = CommissionRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def perform_create(self, serializer):
         commission = serializer.save(customer=self.request.user)

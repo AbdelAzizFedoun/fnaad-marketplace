@@ -405,6 +405,7 @@ class CommissionRequest(models.Model):
     )
     title = models.CharField(max_length=200)
     description = models.TextField()
+    reference_image = models.ImageField(upload_to="commissions/references/", blank=True, null=True)
     category = models.CharField(max_length=20, choices=Product.CATEGORY_CHOICES, default=Product.CATEGORY_OTHER)
     budget_xaf = models.PositiveIntegerField(null=True, blank=True)
     region = models.CharField(max_length=20, choices=ArtistProfile.REGION_CHOICES, null=True, blank=True)

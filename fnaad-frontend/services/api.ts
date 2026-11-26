@@ -788,7 +788,20 @@ export const createCommissionRequest = (data: {
   category: string;
   budget_xaf?: number;
   region?: string;
-}) => api.post("/catalog/commissions/create/", data);
+  referenceImage?: { uri: string; fileName?: string | null; mimeType?: string | null; file?: File | null };
+}) => {
+  if (!data.referenceImage) return api.post("/catalog/commissions/create/", data);
+  const formData = new FormData();
+  formData.append("title", data.title);
+  formData.append("description", data.description);
+  formData.append("category", data.category);
+  if (data.budget_xaf != null) formData.append("budget_xaf", String(data.budget_xaf));
+  if (data.region) formData.append("region", data.region);
+  const image = data.referenceImage;
+  const fileName = image.fileName || `commission-reference-${Date.now()}.jpg`;
+  formData.append("reference_image", Platform.OS === "web" && image.file ? image.file : ({ uri: image.uri, name: fileName, type: image.mimeType || "image/jpeg" } as any));
+  return api.post("/catalog/commissions/create/", formData);
+};
 
 export const getMyCommissionRequests = () => api.get("/catalog/commissions/mine/");
 

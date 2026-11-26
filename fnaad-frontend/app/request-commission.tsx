@@ -9,6 +9,7 @@ import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { shadow, RADIUS } from "../components/shadow";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import * as ImagePicker from "expo-image-picker";
 
 const CATEGORIES = [
   { value: "painting", label: "Peinture" },
@@ -52,6 +53,14 @@ export default function RequestCommissionScreen() {
   const [budget, setBudget] = useState("");
   const [region, setRegion] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [referenceImage, setReferenceImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+
+  const pickReferenceImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (!result.canceled) setReferenceImage(result.assets[0]);
+  };
 
   const handleSubmit = async () => {
     if (!title.trim() || !description.trim()) {
@@ -66,6 +75,7 @@ export default function RequestCommissionScreen() {
         category,
         budget_xaf: budget ? parseInt(budget, 10) : undefined,
         region: region || undefined,
+        referenceImage: referenceImage ? { uri: referenceImage.uri, fileName: referenceImage.fileName, mimeType: referenceImage.mimeType, file: referenceImage.file } : undefined,
       });
       Alert.alert(t("sentTitle"), t("responseSentToClient"), [
         { text: "OK", onPress: () => router.push("/my-commissions") },
@@ -123,6 +133,14 @@ export default function RequestCommissionScreen() {
         </View>
 
         <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Reference image (optional)</Text>
+          <Pressable style={styles.imagePicker} onPress={() => void pickReferenceImage()}>
+            <Ionicons name="image-outline" size={20} color={colors.accent} />
+            <Text style={styles.imagePickerText}>{referenceImage ? referenceImage.fileName || "Image selected" : "Add an example or inspiration image"}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t("approximateBudget")}</Text>
           <TextInput
             style={styles.field}
@@ -177,6 +195,8 @@ function createStyles(
       paddingBottom: 40,
     },
     fieldGroup: { marginBottom: 20 },
+    imagePicker: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderStyle: "dashed", borderColor: colors.border, borderRadius: 10, padding: 14 },
+    imagePickerText: { color: colors.textMuted, fontSize: 13, flex: 1 },
     label: { color: colors.text, fontSize: 13, fontWeight: "700", marginBottom: 8 },
     field: {
       borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14,

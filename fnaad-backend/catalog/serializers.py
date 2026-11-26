@@ -561,7 +561,7 @@ class CommissionRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommissionRequest
         fields = [
-            "id", "customer", "customer_username", "title", "description",
+            "id", "customer", "customer_username", "title", "description", "reference_image",
             "category", "category_display", "budget_xaf", "region", "region_display",
             "status", "responses", "response_count", "created_at",
         ]
