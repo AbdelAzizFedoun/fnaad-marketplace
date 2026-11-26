@@ -23,6 +23,7 @@ export function useVoiceCall(conversationId: number, currentUserId?: number) {
   const signalPollBusy = useRef(false);
   const handledCallId = useRef<number | null>(null);
   const startedAt = useRef<number | null>(null);
+  const reconnectAttempted = useRef(false);
 
   const cleanup = useCallback(() => {
     peerRef.current?.close(); peerRef.current = null;
@@ -42,10 +43,17 @@ export function useVoiceCall(conversationId: number, currentUserId?: number) {
     peer.onicecandidate = (event) => { if (event.candidate) void sendVoiceCallSignal(active.id, "candidate", event.candidate.toJSON() as any); };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === "connected") { startedAt.current = Date.now(); setPhase("connected"); }
-      if (peer.connectionState === "failed") { setError("The call connection failed. Check your network and try again."); void updateVoiceCallStatus(active.id, "ended"); finish("error"); }
+      if (peer.connectionState === "failed" && !reconnectAttempted.current && active.caller === currentUserId) {
+        reconnectAttempted.current = true;
+        setPhase("connecting");
+        void peer.createOffer({ iceRestart: true }).then(async (offer) => {
+          await peer.setLocalDescription(offer);
+          if (peer.localDescription) await sendVoiceCallSignal(active.id, "offer", peer.localDescription.toJSON() as any);
+        }).catch(() => { setError("The call connection failed. Check your network and try again."); void updateVoiceCallStatus(active.id, "ended"); finish("error"); });
+      } else if (peer.connectionState === "failed") { setError("The call connection failed. Check your network and try again."); void updateVoiceCallStatus(active.id, "ended"); finish("error"); }
     };
     return peer;
-  }, [finish]);
+  }, [finish, currentUserId]);
 
   const processSignal = useCallback(async (active: VoiceCall, signal: VoiceCallSignal) => {
     const peer = peerRef.current; if (!peer) return;

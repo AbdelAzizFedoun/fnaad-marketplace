@@ -37,6 +37,7 @@ export function useVoiceCall(conversationId: number, currentUserId?: number) {
   const signalPollBusy = useRef(false);
   const handledCallId = useRef<number | null>(null);
   const callStartedAt = useRef<number | null>(null);
+  const reconnectAttempted = useRef(false);
 
   const cleanupPeer = useCallback(() => {
     peerRef.current?.close();
@@ -80,6 +81,17 @@ export function useVoiceCall(conversationId: number, currentUserId?: number) {
       if (peer.connectionState === "connected") {
         callStartedAt.current = Date.now();
         setPhase("connected");
+      } else if (peer.connectionState === "failed" && !reconnectAttempted.current && activeCall.caller === currentUserId) {
+        reconnectAttempted.current = true;
+        setPhase("connecting");
+        void peer.createOffer({ iceRestart: true }).then(async (offer) => {
+          await peer.setLocalDescription(offer);
+          if (peer.localDescription) await sendVoiceCallSignal(activeCall.id, "offer", { ...peer.localDescription.toJSON() });
+        }).catch(() => {
+          setError("The call connection failed. Check your network and try again.");
+          void updateVoiceCallStatus(activeCall.id, "ended");
+          finishCall("error");
+        });
       } else if (peer.connectionState === "failed") {
         setError("The call connection failed. Check your network and try again.");
         void updateVoiceCallStatus(activeCall.id, "ended").catch((statusError: unknown) =>
@@ -89,7 +101,7 @@ export function useVoiceCall(conversationId: number, currentUserId?: number) {
       }
     };
     return peer;
-  }, [finishCall]);
+  }, [finishCall, currentUserId]);
 
   const processSignal = useCallback(async (activeCall: VoiceCall, signal: VoiceCallSignal) => {
     const peer = peerRef.current;
