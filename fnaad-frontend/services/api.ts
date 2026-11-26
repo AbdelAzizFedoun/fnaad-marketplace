@@ -216,7 +216,7 @@ export const getProductDetail = (id: number) => api.get(`/catalog/products/${id}
 export const createProduct = (data: {
   title: string;
   description: string;
-  price_xaf: number;
+  price_xaf: number | null;
   category: string;
   creation_method?: string;
   moods?: string[];
@@ -574,7 +574,7 @@ export const markConversationRead = (conversationId: number) =>
 
 export const updateProduct = (
   id: number,
-  data: { title: string; description: string; price_xaf: number; category: string }
+  data: { title: string; description: string; price_xaf: number | null; category: string }
 ) => api.put(`/catalog/products/${id}/edit/`, data);
 
 export const deleteProduct = (id: number) => api.delete(`/catalog/products/${id}/edit/`);

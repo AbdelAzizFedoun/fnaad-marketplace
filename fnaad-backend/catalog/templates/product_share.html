@@ -6,7 +6,7 @@
   <title>{{ product.title }} — FNAAD</title>
 
   <meta property="og:title" content="{{ product.title }} — {{ product.artist.brand_name }}" />
-  <meta property="og:description" content="{{ product.price_xaf }} XAF — Discover this artwork on FNAAD" />
+  <meta property="og:description" content="{% if product.price_xaf %}{{ product.price_xaf }} XAF{% else %}Price on request{% endif %} — Discover this artwork on FNAAD" />
   {% if image_url %}
   <meta property="og:image" content="{{ image_url }}" />
   <meta property="og:image:secure_url" content="{{ image_url }}" />
@@ -17,7 +17,7 @@
   <meta property="og:url" content="{{ product.public_url }}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{ product.title }} — {{ product.artist.brand_name }}" />
-  <meta name="twitter:description" content="{{ product.price_xaf }} XAF — Discover this artwork on FNAAD" />
+  <meta name="twitter:description" content="{% if product.price_xaf %}{{ product.price_xaf }} XAF{% else %}Price on request{% endif %} — Discover this artwork on FNAAD" />
   {% if image_url %}<meta name="twitter:image" content="{{ image_url }}" />{% endif %}
 
   <style>
@@ -79,7 +79,7 @@
       </p>
     </div>
 
-    <p class="price">{{ product.price_xaf }} XAF</p>
+    <p class="price">{% if product.price_xaf %}{{ product.price_xaf }} XAF{% else %}Price on request{% endif %}</p>
 
     {% if product.description %}
     <p class="description">{{ product.description }}</p>

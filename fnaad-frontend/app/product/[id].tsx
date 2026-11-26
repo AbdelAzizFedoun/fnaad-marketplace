@@ -24,7 +24,7 @@ type Product = {
   id: number;
   title: string;
   description: string;
-  price_xaf: number;
+  price_xaf: number | null;
   category_display: string;
   artist_id: number;
   artist_user_id: number;
@@ -481,7 +481,7 @@ export default function ProductDetailScreen() {
             <Ionicons name="person-circle-outline" size={15} color={colors.accent} />
             <Text style={styles.artistProfileLinkText}>{t("viewArtistProfileAndBio")}</Text>
           </Pressable>
-          <Text style={styles.price}>{product.price_xaf} XAF</Text>
+          <Text style={styles.price}>{product.price_xaf != null ? `${product.price_xaf} XAF` : "Price on request"}</Text>
           <View style={styles.socialSummary}>
             <Text style={styles.socialSummaryText}>{product.like_count || 0} {(product.like_count || 0) === 1 ? t("like") : t("like") + "s"}</Text>
             <Pressable onPress={handleOpenComments} hitSlop={8}>
@@ -529,15 +529,21 @@ export default function ProductDetailScreen() {
 
           {!isOwnProduct && !product.is_sold && (
             <>
-              <Pressable
-                style={[styles.messageBtn, (sendingInquiry || inquirySent) && styles.disabledBtn]}
-                onPress={handlePurchaseInquiry}
-                disabled={sendingInquiry || inquirySent}
-              >
-                <Text style={styles.messageBtnText}>
-                  {sendingInquiry ? t("purchaseInquirySending") : inquirySent ? t("purchaseInquirySent") : t("purchaseInquiry")}
-                </Text>
-              </Pressable>
+              {product.price_xaf == null ? (
+                <Pressable style={styles.messageBtn} onPress={handleContact}>
+                  <Text style={styles.messageBtnText}>Contact artist to discuss price</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={[styles.messageBtn, (sendingInquiry || inquirySent) && styles.disabledBtn]}
+                  onPress={handlePurchaseInquiry}
+                  disabled={sendingInquiry || inquirySent}
+                >
+                  <Text style={styles.messageBtnText}>
+                    {sendingInquiry ? t("purchaseInquirySending") : inquirySent ? t("purchaseInquirySent") : t("purchaseInquiry")}
+                  </Text>
+                </Pressable>
+              )}
               {inquiryMessage ? <Text style={styles.inquiryMessage}>{inquiryMessage}</Text> : null}
             </>
           )}
@@ -593,7 +599,7 @@ export default function ProductDetailScreen() {
                   <Pressable style={styles.otherCard} onPress={() => router.push(`/product/${item.id}`)}>
                     {url && <Image source={{ uri: url }} style={styles.otherCardImage} />}
                     <Text style={styles.otherCardTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.otherCardPrice}>{item.price_xaf} XAF</Text>
+                    <Text style={styles.otherCardPrice}>{item.price_xaf != null ? `${item.price_xaf} XAF` : "Price on request"}</Text>
                   </Pressable>
                 );
               }}

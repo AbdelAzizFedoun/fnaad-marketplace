@@ -56,7 +56,7 @@ class Product(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER)
-    price_xaf = models.PositiveIntegerField(validators=[MinValueValidator(500)])
+    price_xaf = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(500)])
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     rejection_reason = models.CharField(max_length=255, blank=True)
     is_sold = models.BooleanField(default=False)

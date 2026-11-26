@@ -192,6 +192,7 @@ export default function ShareSheet({ visible, onClose, product }: ShareSheetProp
         if (product.isSold) facts.push(t("sold"));
         if (product.category) facts.push(product.category);
         if (facts.length) lines.push(facts.join(" · "));
+        else lines.push("Price on request");
 
         if (product.authorName) {
             lines.push(`${t("Artist")}: ${product.authorName}${product.authorVerified ? " ✓" : ""}`);

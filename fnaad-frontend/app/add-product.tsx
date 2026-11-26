@@ -91,9 +91,9 @@ export default function AddProductScreen() {
   const handleSubmit = async () => {
     setErrorMsg("");
 
-    const priceNumber = parseInt(price, 10);
-    if (!title.trim() || isNaN(priceNumber) || priceNumber < 500) {
-      setErrorMsg(t("priceValidation"));
+    const priceNumber = price.trim() ? parseInt(price, 10) : null;
+    if (!title.trim() || (priceNumber !== null && (isNaN(priceNumber) || priceNumber < 500))) {
+      setErrorMsg(t("priceValidation") || "Enter a price of at least 500 XAF, or leave it empty for price on request.");
       return;
     }
     if (images.length === 0) {
@@ -197,7 +197,7 @@ export default function AddProductScreen() {
         <View style={styles.fieldGroup}><Text style={styles.label}>{t("creationEvidenceLabel")}</Text><Text style={styles.helper}>{t("creationEvidenceHint")}</Text><Pressable style={styles.evidencePicker} onPress={pickEvidence}><Ionicons name="document-attach-outline" size={22} color={colors.accent} /><Text style={styles.evidenceText}>{evidence.length ? `${evidence.length} ${t("evidenceSelected")}` : t("addEvidence")}</Text></Pressable></View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>{t("priceField")}</Text>
+          <Text style={styles.label}>{t("priceField")} (optional)</Text>
           <TextInput
             style={styles.field}
             placeholder={t("priceField")}

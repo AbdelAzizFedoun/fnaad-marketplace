@@ -204,7 +204,7 @@ export default function ArtistProfileScreen() {
                 </View>
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.cardPrice}>{item.price_xaf} XAF</Text>
+                  <Text style={styles.cardPrice}>{item.price_xaf != null ? `${item.price_xaf} XAF` : "Price on request"}</Text>
                 </View>
               </Pressable>
             );

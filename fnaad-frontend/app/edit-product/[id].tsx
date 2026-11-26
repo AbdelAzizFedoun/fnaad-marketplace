@@ -110,9 +110,9 @@ export default function EditProductScreen() {
 
   const handleSave = async () => {
     setErrorMsg("");
-    const priceNumber = parseInt(price, 10);
-    if (!title.trim() || isNaN(priceNumber) || priceNumber < 500) {
-      setErrorMsg(t("priceValidation"));
+    const priceNumber = price.trim() ? parseInt(price, 10) : null;
+    if (!title.trim() || (priceNumber !== null && (isNaN(priceNumber) || priceNumber < 500))) {
+      setErrorMsg(t("priceValidation") || "Enter a price of at least 500 XAF, or leave it empty for price on request.");
       return;
     }
 
@@ -121,7 +121,7 @@ export default function EditProductScreen() {
       await updateProduct(Number(id), {
         title: title.trim(),
         description: description.trim(),
-        price_xaf: priceNumber,
+          price_xaf: priceNumber,
         category: category,
       });
 

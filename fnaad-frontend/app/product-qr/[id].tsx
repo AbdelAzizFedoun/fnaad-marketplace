@@ -164,10 +164,6 @@ export default function ProductQrScreen() {
                 color: #1A1720; margin: 14px 0 4px;
                 line-height: 1.3;
               }
-              .price {
-                font-size: 15px; font-weight: 600;
-                color: #8A6D1F; margin: 0;
-              }
               .brand {
                 font-size: 10px; color: #999;
                 margin-top: 14px; letter-spacing: 1px;
@@ -183,7 +179,6 @@ export default function ProductQrScreen() {
             <div class="label">
               <img class="qr-img" src="${qrDataUrl}" />
               <p class="title">${product.title}</p>
-              <p class="price">${product.price_xaf.toLocaleString()} XAF</p>
               <p class="brand">FNAAD Marketplace</p>
               <p class="scan-text">Scan to view & purchase</p>
             </div>
@@ -262,7 +257,6 @@ export default function ProductQrScreen() {
             </View>
           </View>
           <Text style={styles.labelTitle} numberOfLines={2}>{product.title}</Text>
-          <Text style={styles.labelPrice}>{product.price_xaf.toLocaleString()} XAF</Text>
           <Text style={styles.labelBrand}>FNAAD Marketplace</Text>
           <Text style={styles.scanHint}>Scan to view & purchase</Text>
         </ViewShot>

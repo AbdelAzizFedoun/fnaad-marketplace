@@ -1,4 +1,5 @@
 from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
 from .models import Order
 from .serializers import OrderSerializer
 from catalog.models import Product
@@ -16,6 +17,8 @@ class OrderCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         product = Product.objects.get(id=self.request.data.get("product"))
+        if product.price_xaf is None:
+            raise ValidationError({"detail": "This artwork has no listed price. Contact the artist to negotiate."})
         serializer.save(
             customer=self.request.user,
             artist=product.artist,
@@ -43,6 +46,8 @@ class OrderCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         product = Product.objects.get(id=self.request.data.get("product"))
+        if product.price_xaf is None:
+            raise ValidationError({"detail": "This artwork has no listed price. Contact the artist to negotiate."})
         order = serializer.save(
             customer=self.request.user,
             artist=product.artist,

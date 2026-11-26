@@ -159,7 +159,7 @@ export default function MyProductsScreen() {
                 )}
                 <View style={styles.cardInfo}>
                   <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-                  <Text style={styles.cardPrice}>{item.price_xaf} XAF</Text>
+                  <Text style={styles.cardPrice}>{item.price_xaf != null ? `${item.price_xaf} XAF` : "Price on request"}</Text>
                   <View style={[styles.statusPill, { borderColor: statusColor }]}>
                     <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                     <Text style={[styles.statusText, { color: statusColor }]}>{getStatusLabel(item.status)}</Text>

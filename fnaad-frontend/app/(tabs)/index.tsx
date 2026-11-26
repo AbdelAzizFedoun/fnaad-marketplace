@@ -1167,7 +1167,7 @@ export default function GalleryScreen() {
                       </View>
                     )}
                     <View style={styles.cardFooter}>
-                      <Text style={styles.cardPrice}>{formatPrice(item.price_xaf)} XAF</Text>
+                      <Text style={styles.cardPrice}>{item.price_xaf != null ? `${formatPrice(item.price_xaf)} XAF` : "Price on request"}</Text>
                       {item.artist_region_display && (
                         <View style={styles.regionTag}>
                           <Ionicons name="location-outline" size={11} color={colors.textMuted} />
