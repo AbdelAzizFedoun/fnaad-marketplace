@@ -72,7 +72,7 @@ def product_public_view(request, slug):
     primary_image = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     image_url = request.build_absolute_uri(primary_image.image.url) if primary_image else None
 
-    return render(request, "product_share.html", {
+    response = render(request, "product_share.html", {
         "product": product,
         "image_url": image_url,
         "product_images": [
@@ -81,6 +81,11 @@ def product_public_view(request, slug):
         ],
         "web_product_url": f"https://fnaad-marketplace.fnaad-marketplace.workers.dev/product/{product.id}",
     })
+    # Shared pages contain the current app/web handoff and social metadata;
+    # never let a CDN or browser keep an older template after deployment.
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    return response
 
 def user_is_artist(user):
     return bool(
