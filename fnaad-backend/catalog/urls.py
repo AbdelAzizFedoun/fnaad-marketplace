@@ -23,6 +23,7 @@ from .views import (
     UnreadMessageCountView,
     ResumeCancelledConversationView, SpotlightListView, MySpotlightFeaturesView, CreateSpotlightRequestView, ArtistSpotlightApprovalView, AdminSpotlightFeaturesView, AdminSpotlightApprovalView,
     VoiceCallStartView, VoiceCallHistoryView, ActiveVoiceCallView, VoiceCallStatusView, VoiceCallSignalsView, ArtistCallSearchView, StartArtistCallConversationView,
+    UserReportCreateView, AdminUserReportListView,
 )
 from .admin_views import FlaggedCopiesListView, ConfirmCopyView, OverruleCopyView, EvidenceReviewListView, EvidenceReviewDecisionView
 
@@ -65,6 +66,8 @@ urlpatterns = [
     path("conversations/blocked/", BlockedConversationListView.as_view(), name="conversation-blocked-list"),
     path("conversations/<int:pk>/unblock/", ConversationUnblockView.as_view(), name="conversation-unblock"),
     path("admin/reported-conversations/", AdminReportedConversationsListView.as_view(), name="admin-reported-conversations"),
+    path("reports/users/", UserReportCreateView.as_view(), name="user-report-create"),
+    path("admin/user-reports/", AdminUserReportListView.as_view(), name="admin-user-reports"),
     path("messages/send/", SendMessageView.as_view(), name="message-send"),
     path("messages/<int:pk>/reaction/", ToggleMessageReactionView.as_view(), name="message-reaction"),
     path("messages/<int:pk>/forward/", ForwardMessageView.as_view(), name="message-forward"),

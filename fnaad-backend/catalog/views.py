@@ -15,7 +15,7 @@ from django.conf import settings
 from rest_framework.exceptions import APIException, ValidationError
 import logging
 from datetime import timedelta
-from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature, VoiceCall, VoiceCallSignal
+from .models import Product, ProductImage, Conversation, Message, MessageReaction, Favorite, Review, CommissionRequest, CommissionResponse, SiteSettings, ProductModerationEvent, CreationEvidence, SpotlightFeature, VoiceCall, VoiceCallSignal, UserReport
 from social.models import Comment
 from social.models import Comment, Like
 from .serializers import ProductSerializer, ProductImageSerializer, ConversationSerializer, MessageSerializer, FavoriteSerializer, ProductCommentSerializer, ReviewSerializer, CommissionRequestSerializer, CommissionResponseSerializer, CustomerProfileSerializer, SiteSettingsSerializer, AdminArtistSerializer, ArtistPublicSerializer, ArtistPrivateSerializer
@@ -1717,6 +1717,26 @@ class AdminReportedConversationsListView(generics.ListAPIView):
     serializer_class = ConversationSerializer
     permission_classes = [IsSuperAdmin]
     queryset = Conversation.objects.filter(is_reported=True).order_by("-reported_at")        
+
+class UserReportCreateView(drf_views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        reported_user = get_object_or_404(get_user_model(), pk=request.data.get("user"))
+        if reported_user == request.user:
+            return Response({"detail": "You cannot report yourself."}, status=400)
+        reason = str(request.data.get("reason", "")).strip()
+        if not reason:
+            return Response({"detail": "Please specify the problem."}, status=400)
+        product = Product.objects.filter(pk=request.data.get("product")).first() if request.data.get("product") else None
+        report = UserReport.objects.create(reporter=request.user, reported_user=reported_user, product=product, reason=reason)
+        return Response({"id": report.id, "status": report.status}, status=201)
+
+class AdminUserReportListView(generics.ListAPIView):
+    permission_classes = [IsSuperAdmin]
+    queryset = UserReport.objects.select_related("reporter", "reported_user", "product").all()
+    def list(self, request, *args, **kwargs):
+        data = [{"id": r.id, "reporter": r.reporter.username, "reported_user": r.reported_user.username, "product": r.product.title if r.product else None, "reason": r.reason, "status": r.status, "created_at": r.created_at} for r in self.get_queryset()]
+        return Response(data)
 
 
 class ToggleFavoriteView(generics.GenericAPIView):

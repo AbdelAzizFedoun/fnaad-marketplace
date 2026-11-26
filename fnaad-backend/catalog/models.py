@@ -141,6 +141,23 @@ class ProductModerationEvent(models.Model):
         ordering = ["-created_at"]
 
 
+class UserReport(models.Model):
+    STATUS_OPEN = "open"
+    STATUS_RESOLVED = "resolved"
+    STATUS_DISMISSED = "dismissed"
+    STATUS_CHOICES = [(STATUS_OPEN, "Open"), (STATUS_RESOLVED, "Resolved"), (STATUS_DISMISSED, "Dismissed")]
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="submitted_user_reports")
+    reported_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="received_user_reports")
+    product = models.ForeignKey(Product, null=True, blank=True, on_delete=models.CASCADE, related_name="user_reports")
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
 class CreationEvidence(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="creation_evidence")
     evidence_file = models.FileField(upload_to="products/evidence/")
