@@ -809,6 +809,13 @@ class ActiveVoiceCallView(drf_views.APIView):
             call.status = VoiceCall.STATUS_EXPIRED
             call.save(update_fields=["status", "updated_at"])
             call.signals.all().delete()
+            create_notification(
+                call.caller,
+                "Appel manqué",
+                f"{call.recipient.username} n'a pas répondu à votre appel.",
+                "voice_call_missed",
+                {"conversation_id": call.conversation_id, "call_id": call.id},
+            )
             return Response(None)
 
         if call.status == VoiceCall.STATUS_ACCEPTED and call.last_activity_at < now - timedelta(seconds=10):
