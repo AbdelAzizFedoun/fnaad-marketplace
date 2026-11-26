@@ -105,6 +105,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="calls"
+        options={{
+          title: "Calls",
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon activeIcon="call" inactiveIcon="call-outline" focused={focused} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="notifications"
         options={{
           title: t("Notifications") || "Alerts",

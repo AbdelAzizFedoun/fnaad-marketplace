@@ -666,10 +666,31 @@ class ConversationDetailView(generics.RetrieveAPIView):
 
 
 class VoiceCallSerializer(drf_serializers.ModelSerializer):
+    other_user_name = drf_serializers.SerializerMethodField()
+    other_user_avatar = drf_serializers.SerializerMethodField()
+    direction = drf_serializers.SerializerMethodField()
     class Meta:
         model = VoiceCall
-        fields = ["id", "conversation", "caller", "recipient", "status", "created_at"]
+        fields = ["id", "conversation", "caller", "recipient", "status", "created_at", "other_user_name", "other_user_avatar", "direction"]
         read_only_fields = fields
+
+    def _other_user(self, obj):
+        request = self.context.get("request")
+        if request and request.user.id == obj.caller_id:
+            return obj.recipient
+        return obj.caller
+
+    def get_other_user_name(self, obj):
+        user = self._other_user(obj)
+        artist = getattr(user, "artist_profile", None)
+        return artist.brand_name if artist and artist.brand_name else user.username
+
+    def get_other_user_avatar(self, obj):
+        return getattr(self._other_user(obj), "profile_photo", None)
+
+    def get_direction(self, obj):
+        request = self.context.get("request")
+        return "outgoing" if request and request.user.id == obj.caller_id else "incoming"
 
 
 class VoiceCallSignalSerializer(drf_serializers.ModelSerializer):
@@ -722,6 +743,16 @@ class VoiceCallStartView(drf_views.APIView):
                 recipient=recipient,
             )
         return Response(VoiceCallSerializer(call).data, status=status.HTTP_201_CREATED)
+
+
+class VoiceCallHistoryView(drf_views.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = VoiceCallSerializer
+
+    def get_queryset(self):
+        return VoiceCall.objects.filter(
+            models.Q(caller=self.request.user) | models.Q(recipient=self.request.user)
+        ).select_related("caller", "recipient", "caller__artist_profile", "recipient__artist_profile").order_by("-created_at")[:100]
 
 
 class ActiveVoiceCallView(drf_views.APIView):

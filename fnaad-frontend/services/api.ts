@@ -398,6 +398,9 @@ export type VoiceCall = {
   recipient: number;
   status: "ringing" | "accepted" | "rejected" | "ended" | "expired";
   created_at: string;
+  other_user_name?: string;
+  other_user_avatar?: string | null;
+  direction?: "incoming" | "outgoing";
 };
 
 export type VoiceCallSignal = {
@@ -409,6 +412,7 @@ export type VoiceCallSignal = {
 
 export const startVoiceCall = (conversationId: number) =>
   api.post<VoiceCall>(`/catalog/conversations/${conversationId}/voice-calls/`);
+export const getVoiceCallHistory = () => api.get<VoiceCall[]>("/catalog/voice-calls/history/");
 
 export const getActiveVoiceCall = (conversationId: number) =>
   api.get<VoiceCall | null>(`/catalog/conversations/${conversationId}/voice-calls/active/`);
