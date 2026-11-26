@@ -671,7 +671,7 @@ class VoiceCallSerializer(drf_serializers.ModelSerializer):
     direction = drf_serializers.SerializerMethodField()
     class Meta:
         model = VoiceCall
-        fields = ["id", "conversation", "caller", "recipient", "status", "created_at", "other_user_name", "other_user_avatar", "direction"]
+        fields = ["id", "conversation", "caller", "recipient", "status", "created_at", "answered_at", "ended_at", "duration_seconds", "other_user_name", "other_user_avatar", "direction"]
         read_only_fields = fields
 
     def _other_user(self, obj):
@@ -816,7 +816,17 @@ class VoiceCallStatusView(drf_views.APIView):
 
         call.status = new_status
         call.last_activity_at = now
-        call.save(update_fields=["status", "last_activity_at", "updated_at"])
+        update_fields = ["status", "last_activity_at", "updated_at"]
+        if new_status == VoiceCall.STATUS_ACCEPTED and call.answered_at is None:
+            call.answered_at = now
+            update_fields.append("answered_at")
+        if new_status in [VoiceCall.STATUS_REJECTED, VoiceCall.STATUS_ENDED]:
+            call.ended_at = now
+            update_fields.append("ended_at")
+            if call.answered_at:
+                call.duration_seconds = max(0, int((now - call.answered_at).total_seconds()))
+                update_fields.append("duration_seconds")
+        call.save(update_fields=update_fields)
         if new_status in [VoiceCall.STATUS_REJECTED, VoiceCall.STATUS_ENDED]:
             call.signals.all().delete()
         return Response(VoiceCallSerializer(call).data)

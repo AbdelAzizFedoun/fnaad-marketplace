@@ -398,6 +398,9 @@ export type VoiceCall = {
   recipient: number;
   status: "ringing" | "accepted" | "rejected" | "ended" | "expired";
   created_at: string;
+  answered_at?: string | null;
+  ended_at?: string | null;
+  duration_seconds?: number | null;
   other_user_name?: string;
   other_user_avatar?: string | null;
   direction?: "incoming" | "outgoing";

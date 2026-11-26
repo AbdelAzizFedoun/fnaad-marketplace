@@ -10,6 +10,7 @@ import Image from "../../components/MediaImage";
 const formatDate = (value: string) => new Date(value).toLocaleString([], {
   day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
 });
+const formatDuration = (seconds?: number | null) => seconds == null ? "" : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 export default function CallsScreen() {
   const router = useRouter();
@@ -55,8 +56,8 @@ export default function CallsScreen() {
         const color = missed ? "#B0524F" : colors.accent;
         return <Pressable style={styles.row} onPress={() => router.push(`/conversation/${item.conversation}`)}>
           {item.other_user_avatar ? <Image source={{ uri: resolveMediaUrl(item.other_user_avatar)! }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarFallback]}><Ionicons name="person" size={20} color={colors.textMuted} /></View>}
-          <View style={styles.copy}><Text style={styles.name}>{item.other_user_name || "FNAAD user"}</Text><View style={styles.meta}><Ionicons name={item.direction === "outgoing" ? "arrow-up" : "arrow-down"} size={15} color={color} /><Text style={[styles.status, { color }]}>{missed ? "Missed" : item.direction === "outgoing" ? "Outgoing" : "Incoming"}</Text><Text style={styles.date}>{formatDate(item.created_at)}</Text></View></View>
-          <Ionicons name="call-outline" size={21} color={colors.accent} />
+          <View style={styles.copy}><Text style={styles.name}>{item.other_user_name || "FNAAD user"}</Text><View style={styles.meta}><Ionicons name={item.direction === "outgoing" ? "arrow-up" : "arrow-down"} size={15} color={color} /><Text style={[styles.status, { color }]}>{missed ? "Missed" : item.direction === "outgoing" ? "Outgoing" : "Incoming"}</Text><Text style={styles.date}>{formatDate(item.created_at)}{formatDuration(item.duration_seconds) ? ` · ${formatDuration(item.duration_seconds)}` : ""}</Text></View></View>
+          <Pressable onPress={() => router.push(`/conversation/${item.conversation}?autoCall=1`)} hitSlop={10} accessibilityLabel="Call back"><Ionicons name="call-outline" size={21} color={colors.accent} /></Pressable>
         </Pressable>;
       }}
     />}
